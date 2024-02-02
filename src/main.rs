@@ -18,6 +18,7 @@ async fn main() -> Result<(), Error> {
 
     let default_panic = take_hook();
     set_hook(Box::new(move |info| {
+        error!("Panic: {}", info);
         default_panic(info);
         exit(1);
     }));
