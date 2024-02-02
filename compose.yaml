@@ -5,5 +5,3 @@ services:
       context: .
       target: builder
     command: cargo run --release
-    ports:
-      - "1000:1000"
