@@ -1,0 +1,9 @@
+version: "3.4"
+services:
+  web:
+    build:
+      context: .
+      target: builder
+    command: cargo run --release
+    ports:
+      - "1000:1000"
