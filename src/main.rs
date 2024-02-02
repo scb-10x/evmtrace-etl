@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    panic::{set_hook, take_hook},
+    process::exit,
+};
 
 use anyhow::{Error, Result};
 use log::{debug, error, info, warn};
@@ -6,11 +10,17 @@ use rdkafka::TopicPartitionList;
 use tokio::{select, spawn};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
-use zkscan_etl::{consumer::TRACE_CONSUMER, dumper::POSTGRESQL_DUMPER};
+use zkscan_etl::{channels::CHANNEL, consumer::TRACE_CONSUMER, dumper::POSTGRESQL_DUMPER};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     dotenvy::dotenv().ok();
+
+    let default_panic = take_hook();
+    set_hook(Box::new(move |info| {
+        default_panic(info);
+        exit(1);
+    }));
 
     let filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::DEBUG.into())
@@ -24,7 +34,7 @@ async fn main() -> Result<(), Error> {
 
     let handle_log = spawn(async move {
         let mut cnt = HashMap::<u64, u64>::new();
-        let mut rx = TRACE_CONSUMER.tx.subscribe();
+        let mut rx = CHANNEL.result_tx.subscribe();
 
         while let Ok((traces, _)) = rx.recv().await {
             for t in traces {
@@ -37,7 +47,7 @@ async fn main() -> Result<(), Error> {
         Result::<()>::Ok(())
     });
     let handle_dump = spawn(async move {
-        let mut rx = TRACE_CONSUMER.tx.subscribe();
+        let mut rx = CHANNEL.result_tx.subscribe();
 
         let mut buffer = vec![];
         let mut latest_partition: (&str, TopicPartitionList);

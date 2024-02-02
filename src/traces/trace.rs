@@ -42,3 +42,9 @@ impl Display for Trace {
         )
     }
 }
+
+impl AsRef<Trace> for Trace {
+    fn as_ref(&self) -> &Trace {
+        self
+    }
+}
