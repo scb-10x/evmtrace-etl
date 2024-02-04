@@ -9,9 +9,15 @@ use structstruck::strike;
 
 use crate::dumper::Insertable;
 
+use super::Block;
+
 strike! {
     #[strikethrough[derive(Debug, Clone, Serialize, Deserialize)]]
     pub enum EtlResult {
+        BlockWithChainId(struct {
+            chain_id: u64,
+            block: Block,
+        }),
         /// Contract result
         Contract(struct {
             pub chain_id: u64,
@@ -25,6 +31,7 @@ strike! {
             /// Lower degree call addresses
             pub call: HashSet<Address>,
         }),
+        /// Transaction result
         Transaction(struct {
             pub chain_id: u64,
             pub from_address: Address,
@@ -80,11 +87,24 @@ impl Display for Transaction {
     }
 }
 
+impl Display for BlockWithChainId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            to_string_pretty(self).expect("Failed to serialize block")
+        )
+    }
+}
+
 impl Display for EtlResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Contract(contract) => write!(f, "Contract: {}", contract),
             Self::Transaction(transaction) => write!(f, "Tranasction: {}", transaction),
+            Self::BlockWithChainId(block) => {
+                write!(f, "Block: {}", block)
+            }
         }
     }
 }
@@ -94,6 +114,7 @@ impl EtlResult {
         match self {
             Self::Contract(contract) => contract.chain_id,
             Self::Transaction(transaction) => transaction.chain_id,
+            Self::BlockWithChainId(block) => block.chain_id,
         }
     }
 }
@@ -193,6 +214,45 @@ impl Contract {
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join("-")
+        )
+    }
+}
+
+impl Insertable for BlockWithChainId {
+    const INSERT_QUERY: &'static str = "INSERT INTO block (number, timestamp, hash, parent_hash, transaction_count, nonce, miner, difficulty, total_difficulty, size, gas_limit, gas_used, base_fee_per_gas, chain_id)
+    VALUES {values} 
+    ON CONFLICT (chain_id, number) DO UPDATE
+    SET
+        timestamp = EXCLUDED.timestamp,
+        hash = EXCLUDED.hash,
+        parent_hash = EXCLUDED.parent_hash,
+        transaction_count = EXCLUDED.transaction_count,
+        nonce = EXCLUDED.nonce,
+        miner = EXCLUDED.miner,
+        difficulty = EXCLUDED.difficulty,
+        total_difficulty = EXCLUDED.total_difficulty,
+        size = EXCLUDED.size,
+        gas_limit = EXCLUDED.gas_limit,
+        gas_used = EXCLUDED.gas_used,
+        base_fee_per_gas = EXCLUDED.base_fee_per_gas";
+
+    fn value(v: &Self) -> String {
+        format!(
+            "({},{},{},'{}','{}',{},'{}','{}',{},{},{},{},{},{})",
+            v.chain_id,
+            v.block.number,
+            v.block.timestamp,
+            v.block.hash,
+            v.block.parent_hash,
+            v.block.transaction_count,
+            v.block.nonce,
+            v.block.miner,
+            v.block.difficulty,
+            v.block.total_difficulty,
+            v.block.size,
+            v.block.gas_limit,
+            v.block.gas_used,
+            v.block.base_fee_per_gas,
         )
     }
 }

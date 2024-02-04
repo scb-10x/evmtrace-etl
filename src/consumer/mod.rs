@@ -1,4 +1,4 @@
-use std::{collections::HashMap, marker::PhantomData, pin::Pin, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData, pin::Pin, sync::Arc};
 
 use alloy_primitives::Address;
 use anyhow::{anyhow, bail, Result};
@@ -15,7 +15,9 @@ use tokio::{
     task::{JoinHandle, JoinSet},
 };
 
+mod block;
 mod trace;
+pub use block::*;
 pub use trace::*;
 
 pub const EC_MUL_ADDRESS: Address = Address::new([
@@ -42,13 +44,6 @@ impl<T: DeserializeOwned + Sync + Unpin> KafkaStreamConsumer<T>
 where
     Self: KafkaConsumer<Data = T>,
 {
-    pub fn commit(&self, topic_id: &str, topic_partition_list: TopicPartitionList) -> Result<()> {
-        if let Some((_, consumer)) = self.consumers.get(topic_id) {
-            consumer.commit(&topic_partition_list, CommitMode::Async)?;
-        }
-        Ok(())
-    }
-
     pub fn poll(&self) -> JoinHandle<Result<()>> {
         let mut set = JoinSet::<Result<()>>::new();
         for (topic_id, (chain_id, consumer)) in &self.consumers {
@@ -56,24 +51,36 @@ where
             let chain_id = *chain_id;
             let consumer = consumer.clone();
             set.spawn(async move {
-                let stream = consumer
-                    .stream()
-                    .map(|msg| -> Result<(T, TopicPartitionList)> {
-                        let m = msg?;
-                        let payload = m
-                            .payload_view::<str>()
-                            .and_then(|p| p.ok())
-                            .ok_or_else(|| anyhow!("Invalid payload"))?;
-                        let data = from_str::<T>(payload)
-                            .map_err(|e| anyhow!("Serialization Error: {e}, original {payload}"))?;
-                        let mut topic_partition = TopicPartitionList::new();
-                        topic_partition.add_partition_offset(
-                            m.topic(),
-                            m.partition(),
-                            Offset::from_raw(m.offset() - 1),
-                        )?;
-                        Ok((data, topic_partition))
-                    });
+                let stream = consumer.stream().map(|msg| -> Result<(T, TopicCommiter)> {
+                    let m = msg?;
+                    let payload = m
+                        .payload_view::<str>()
+                        .and_then(|p| p.ok())
+                        .ok_or_else(|| anyhow!("Invalid payload"))?;
+                    let data = from_str::<T>(payload)
+                        .map_err(|e| anyhow!("Serialization Error: {e}, original {payload}"))?;
+
+                    Ok((
+                        data,
+                        TopicCommiter {
+                            chain_id,
+                            topic_id,
+                            commit_fn: {
+                                let mut topic_partition = TopicPartitionList::new();
+                                topic_partition.add_partition_offset(
+                                    m.topic(),
+                                    m.partition(),
+                                    Offset::from_raw(m.offset() - 1),
+                                )?;
+                                let consumer = consumer.clone();
+                                Arc::new(move || -> Result<()> {
+                                    consumer.commit(&topic_partition, CommitMode::Async)?;
+                                    Ok(())
+                                })
+                            },
+                        },
+                    ))
+                });
                 Self::handle_data_stream(topic_id, chain_id, Box::pin(stream)).await?;
                 Ok(())
             });
@@ -99,8 +106,30 @@ pub trait KafkaConsumer {
     fn handle_data_stream<'a>(
         topic_id: &'static str,
         chain_id: u64,
-        stream: BoxStream<'a, Result<(Self::Data, TopicPartitionList)>>,
+        stream: BoxStream<'a, Result<(Self::Data, TopicCommiter)>>,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
     where
         Self: Sync + 'a;
+}
+
+#[derive(Clone)]
+pub struct TopicCommiter {
+    pub chain_id: u64,
+    pub topic_id: &'static str,
+    pub commit_fn: Arc<dyn Fn() -> Result<()> + Send + Sync>,
+}
+
+impl Debug for TopicCommiter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TopicCommit")
+            .field("chain_id", &self.chain_id)
+            .field("topic_id", &self.topic_id)
+            .finish()
+    }
+}
+
+impl TopicCommiter {
+    pub fn commit(&self) -> Result<()> {
+        (self.commit_fn)()
+    }
 }

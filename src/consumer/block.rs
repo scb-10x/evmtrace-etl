@@ -10,20 +10,15 @@ use rdkafka::{
     util::DefaultRuntime,
 };
 
-use crate::{
-    channels::CHANNEL, config::CONFIG, consumer::trace::trace_tree::TraceTree, types::Trace,
-};
+use crate::{config::CONFIG, types::Block};
 
 use super::{KafkaConsumer, KafkaStreamConsumer, TopicCommiter};
 
-mod trace_tree;
+pub static BLOCK_CONSUMER: Lazy<BlockConsumer> = Lazy::new(BlockConsumer::new);
+pub type BlockConsumer = KafkaStreamConsumer<Block>;
 
-pub static TRACE_CONSUMER: Lazy<TraceConsumer> = Lazy::new(TraceConsumer::new);
-
-pub type TraceConsumer = KafkaStreamConsumer<Trace>;
-
-impl KafkaConsumer for TraceConsumer {
-    type Data = Trace;
+impl KafkaConsumer for BlockConsumer {
+    type Data = Block;
 
     fn new() -> Self {
         let config = CONFIG.kafka_config();
@@ -35,9 +30,9 @@ impl KafkaConsumer for TraceConsumer {
                     StreamConsumer::<DefaultConsumerContext, DefaultRuntime>::from_config(&config)
                         .expect("Failed to create consumer");
                 consumer
-                    .subscribe(&[&c.kafka_trace_topic])
+                    .subscribe(&[&c.kafka_block_topic])
                     .expect("Failed to subscribe to topic");
-                (c.kafka_trace_topic.as_str(), (c.id, Arc::new(consumer)))
+                (c.kafka_block_topic.as_str(), (c.id, Arc::new(consumer)))
             })
             .collect::<HashMap<_, _>>();
         Self {
@@ -48,28 +43,18 @@ impl KafkaConsumer for TraceConsumer {
 
     fn handle_data_stream<'a>(
         topic_id: &'static str,
-        chain_id: u64,
+        _chain_id: u64,
         mut stream: BoxStream<'a, Result<(Self::Data, TopicCommiter)>>,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>>
     where
         Self: Sync + 'a,
     {
         Box::pin(async move {
-            let mut trace_tree = TraceTree::new(topic_id, chain_id);
-
-            info!("Starting trace consumer for {}", topic_id);
+            info!("Starting block consumer for {}", topic_id);
             while let Some(t) = stream.next().await {
-                let (trace, tpl) = t?;
+                let (block, _) = t?;
 
-                if trace.trace_address.is_empty() {
-                    if let Some(results) = trace_tree.commit() {
-                        CHANNEL.send_result(results, tpl);
-                    }
-
-                    trace_tree.reset(&trace);
-                }
-
-                trace_tree.add_trace(trace);
+                info!("Received block from {}: {}", topic_id, block);
             }
             Ok(())
         })

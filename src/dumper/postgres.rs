@@ -16,6 +16,7 @@ pub trait Insertable {
     fn value(v: &Self) -> String;
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct InsertTree(HashMap<&'static str, Vec<String>>);
 
 impl InsertTree {
@@ -24,10 +25,7 @@ impl InsertTree {
     }
 
     pub fn insert<T: Insertable>(&mut self, v: &T) {
-        self.0
-            .entry(T::INSERT_QUERY)
-            .or_insert_with(Vec::new)
-            .push(T::value(v));
+        self.0.entry(T::INSERT_QUERY).or_default().push(T::value(v));
     }
 
     pub async fn execute<'a>(
@@ -77,6 +75,7 @@ impl PostgreSQLDumper {
                 EtlResult::Transaction(t) => {
                     insert_tree.insert(t);
                 }
+                EtlResult::BlockWithChainId(b) => insert_tree.insert(b),
             }
         }
 

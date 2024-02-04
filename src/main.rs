@@ -8,12 +8,15 @@ use std::{
 use anyhow::{anyhow, Error, Result};
 use axum::{routing::get, serve, Router};
 use log::{debug, error, info, warn};
-use rdkafka::TopicPartitionList;
 use tokio::{net::TcpListener, select, spawn};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use zkscan_etl::{
-    api, channels::CHANNEL, config::CONFIG, consumer::TRACE_CONSUMER, dumper::POSTGRESQL_DUMPER,
+    api,
+    channels::CHANNEL,
+    config::CONFIG,
+    consumer::{TopicCommiter, BLOCK_CONSUMER},
+    dumper::POSTGRESQL_DUMPER,
 };
 
 #[tokio::main]
@@ -55,7 +58,7 @@ async fn main() -> Result<(), Error> {
         let mut rx = CHANNEL.result_tx.subscribe();
 
         let mut buffer = vec![];
-        let mut latest_partition: Option<(&str, TopicPartitionList)> = None;
+        let mut latest_partition: Option<TopicCommiter> = None;
         while let Ok((t, partition)) = rx.recv().await {
             buffer.extend(t);
 
@@ -78,8 +81,8 @@ async fn main() -> Result<(), Error> {
             }
 
             match latest_partition {
-                Some(l) if l.0 != partition.0 => {
-                    TRACE_CONSUMER.commit(l.0, l.1)?;
+                Some(l) if l.topic_id != partition.topic_id => {
+                    l.commit()?;
                 }
                 _ => {}
             }
@@ -101,7 +104,8 @@ async fn main() -> Result<(), Error> {
     });
 
     match select! {
-        e = TRACE_CONSUMER.poll() => e,
+        //e = TRACE_CONSUMER.poll() => e,
+        e = BLOCK_CONSUMER.poll() => e,
         e = handle_log => e,
         e = handle_dump => e,
         e = server => e,
