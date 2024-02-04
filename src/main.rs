@@ -1,16 +1,20 @@
 use std::{
     collections::HashMap,
+    net::Ipv4Addr,
     panic::{set_hook, take_hook},
     process::exit,
 };
 
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
+use axum::{routing::get, serve, Router};
 use log::{debug, error, info, warn};
 use rdkafka::TopicPartitionList;
-use tokio::{select, spawn};
+use tokio::{net::TcpListener, select, spawn};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
-use zkscan_etl::{channels::CHANNEL, consumer::TRACE_CONSUMER, dumper::POSTGRESQL_DUMPER};
+use zkscan_etl::{
+    api, channels::CHANNEL, config::CONFIG, consumer::TRACE_CONSUMER, dumper::POSTGRESQL_DUMPER,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -85,10 +89,22 @@ async fn main() -> Result<(), Error> {
         Result::<()>::Ok(())
     });
 
+    let server = spawn(async move {
+        let app = Router::new()
+            .route("/", get(|| async { "Ok" }))
+            .nest("/", api::routes());
+        let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, CONFIG.port)).await?;
+        info!("Server is listening on http://0.0.0.0:{}", CONFIG.port,);
+        serve(listener, app)
+            .await
+            .map_err(|e| anyhow!("Server error: {}", e))
+    });
+
     match select! {
         e = TRACE_CONSUMER.poll() => e,
         e = handle_log => e,
         e = handle_dump => e,
+        e = server => e,
     } {
         Ok(Err(e)) => error!("Error: {}", e),
         Err(e) => error!("Join Error: {}", e),

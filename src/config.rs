@@ -29,6 +29,7 @@ strike! {
             pub kafka_trace_topic: String,
             pub kafka_block_topic: String,
         }>,
+        pub port: u16,
     }
 }
 
@@ -67,6 +68,10 @@ impl Config {
                 //Chains::trace(8453, "base_traces"),
                 //Chains::trace(56, "bsc_traces"),
             ],
+            port: var("PORT")
+                .unwrap_or("8080".to_string())
+                .parse()
+                .expect("PORT must be a number"),
         }
     }
 

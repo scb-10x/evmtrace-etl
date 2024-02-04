@@ -9,6 +9,7 @@ edition = "2021"
 alloy-primitives = { version = "0.6.2", features = ["serde"] }
 anyhow = "1.0.79"
 async-once-cell = "0.5.3"
+axum = "0.7.4"
 deadpool-postgres = "0.12.1"
 dotenvy = "0.15.7"
 futures = "0.3.30"
