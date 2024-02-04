@@ -1,5 +1,4 @@
 use alloy_primitives::{aliases::B32, Address, Bytes, B256};
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
 use std::{
@@ -7,6 +6,8 @@ use std::{
     fmt::{Display, Formatter},
 };
 use structstruck::strike;
+
+use crate::dumper::Insertable;
 
 strike! {
     #[strikethrough[derive(Debug, Clone, Serialize, Deserialize)]]
@@ -109,77 +110,79 @@ impl AsRef<Contract> for Contract {
     }
 }
 
-impl Transaction {
+impl Insertable for Transaction {
     const INSERT_QUERY: &'static str = "INSERT INTO transactions (
         chain_id, from_address, to_address, closest_address,
         function_signature, transaction_hash, transaction_index,
         block_number, block_timestamp, block_hash, value, input,
         gas_used_requested, gas_used_total, gas_used_first_degree, gas_used_second_degree
-    ) VALUES";
-    const CONFLICT_CLAUSE: &'static str = "ON CONFLICT (chain_id, transaction_hash) DO NOTHING";
+    ) VALUES {values} ON CONFLICT (chain_id, transaction_hash) DO NOTHING";
 
-    pub async fn inserts<'a, T: AsRef<Self>>(
-        values: &[T],
-        transaction: &'a tokio_postgres::Transaction<'a>,
-    ) -> Result<()> {
-        if values.is_empty() {
-            return Ok(());
-        }
+    fn value(v: &Self) -> String {
+        format!(
+            "({},'{}','{}','{{{}}}','{}','{}',{},{},{},{},{},'{}',{},{},{},{})",
+            v.chain_id,
+            v.from_address,
+            v.to_address,
+            v.closest_address
+                .iter()
+                .map(|e| format!("\"{}\"", e))
+                .collect::<Vec<_>>()
+                .join(","),
+            v.function_signature,
+            v.transaction_hash,
+            v.transaction_index,
+            v.block_number,
+            v.block_timestamp
+                .map(|e| format!("'{}'", e))
+                .unwrap_or("NULL".to_string()), // Handle Option<u64> appropriately
+            v.block_hash
+                .map(|e| format!("'{}'", e))
+                .unwrap_or("NULL".to_string()), // Handle Option<B256> appropriately
+            v.value,
+            v.input,
+            v.gas_used.requested,
+            v.gas_used.total,
+            v.gas_used.first_degree,
+            v.gas_used.second_degree
+        )
+    }
+}
 
-        let params_string = values
-            .iter()
-            .map(|v| {
-                let v = v.as_ref();
-                format!(
-                    "({},'{}','{}','{{{}}}','{}','{}',{},{},{},{},{},'{}',{},{},{},{})",
-                    v.chain_id,
-                    v.from_address,
-                    v.to_address,
-                    v.closest_address
-                        .iter()
-                        .map(|e| format!("\"{}\"", e))
-                        .collect::<Vec<_>>()
-                        .join(","),
-                    v.function_signature,
-                    v.transaction_hash,
-                    v.transaction_index,
-                    v.block_number,
-                    v.block_timestamp
-                        .map(|e| format!("'{}'", e))
-                        .unwrap_or("NULL".to_string()), // Handle Option<u64> appropriately
-                    v.block_hash
-                        .map(|e| format!("'{}'", e))
-                        .unwrap_or("NULL".to_string()), // Handle Option<B256> appropriately
-                    v.value,
-                    v.input,
-                    v.gas_used.requested,
-                    v.gas_used.total,
-                    v.gas_used.first_degree,
-                    v.gas_used.second_degree
-                )
-            })
-            .collect::<Vec<String>>()
-            .join(",");
+impl Insertable for Contract {
+    const INSERT_QUERY: &'static str = "INSERT INTO contracts (
+        chain_id, address, function_signatures, degree,
+        ec_mul_count, ec_pairing_count, ec_pairing_input_sizes, call
+    ) VALUES {values} ON CONFLICT (chain_id, address, function_signatures) DO NOTHING";
 
-        let query = format!(
-            "{} {} {}",
-            Self::INSERT_QUERY,
-            params_string,
-            Self::CONFLICT_CLAUSE
-        );
-        transaction.execute(&query, &[]).await?;
-        Ok(())
+    fn value(v: &Self) -> String {
+        format!(
+            "({},'{}','{{{}}}',{}, {}, {}, '{{{}}}', '{{{}}}')",
+            v.chain_id,
+            v.address,
+            v.function_signatures
+                .iter()
+                .map(|e| format!("\"{}\"", e))
+                .collect::<Vec<_>>()
+                .join(","),
+            v.degree,
+            v.ec_mul_count,
+            v.ec_pairing_count,
+            v.ec_pairing_input_sizes
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(","),
+            v.call
+                .iter()
+                .map(|e| format!("\"{}\"", e))
+                .collect::<Vec<_>>()
+                .join(",")
+        )
     }
 }
 
 impl Contract {
-    const INSERTS_QUERY: &'static str = "INSERT INTO contracts (
-        chain_id, address, function_signatures, degree,
-        ec_mul_count, ec_pairing_count, ec_pairing_input_sizes, call
-    ) VALUES";
-    const CONFLICT_CLAUSE: &'static str =
-        "ON CONFLICT (chain_id, address, function_signatures) DO NOTHING";
-
     pub fn cache_key(&self) -> String {
         format!(
             "c:{}:{}:{}",
@@ -192,82 +195,4 @@ impl Contract {
                 .join("-")
         )
     }
-
-    pub async fn inserts<'a, T: AsRef<Self>>(
-        values: &[T],
-        transaction: &'a tokio_postgres::Transaction<'a>,
-    ) -> Result<()> {
-        if values.is_empty() {
-            return Ok(());
-        }
-
-        let params_string = values
-            .iter()
-            .map(|v| {
-                let v = v.as_ref();
-                format!(
-                    "({},'{}','{{{}}}',{}, {}, {}, '{{{}}}', '{{{}}}')",
-                    v.chain_id,
-                    v.address,
-                    v.function_signatures
-                        .iter()
-                        .map(|e| format!("\"{}\"", e))
-                        .collect::<Vec<_>>()
-                        .join(","),
-                    v.degree,
-                    v.ec_mul_count,
-                    v.ec_pairing_count,
-                    v.ec_pairing_input_sizes
-                        .iter()
-                        .map(|v| v.to_string())
-                        .collect::<Vec<_>>()
-                        .join(","),
-                    v.call
-                        .iter()
-                        .map(|e| format!("\"{}\"", e))
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
-            })
-            .collect::<Vec<String>>()
-            .join(",");
-
-        let query = format!(
-            "{} {} {}",
-            Self::INSERTS_QUERY,
-            params_string,
-            Self::CONFLICT_CLAUSE
-        );
-        transaction.execute(&query, &[]).await?;
-
-        Ok(())
-    }
-
-    //pub async fn insert<'a>(&self, transaction: &'a tokio_postgres::Transaction<'a>) -> Result<()> {
-    //let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[
-    //&(self.chain_id as i64),
-    //&self.address.to_string(),
-    //&self
-    //.function_signatures
-    //.iter()
-    //.map(ToString::to_string)
-    //.collect::<Vec<_>>(),
-    //&(self.degree as i16),
-    //&(self.ec_mul_count as i16),
-    //&(self.ec_pairing_count as i16),
-    //&self
-    //.ec_pairing_input_sizes
-    //.iter()
-    //.map(|v| *v as i32)
-    //.collect::<Vec<_>>(),
-    //&self
-    //.call
-    //.iter()
-    //.map(ToString::to_string)
-    //.collect::<Vec<_>>(),
-    //];
-    //transaction.execute(Self::INSERT_QUERY, params).await?;
-
-    //Ok(())
-    //}
 }

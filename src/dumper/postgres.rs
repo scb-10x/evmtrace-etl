@@ -1,9 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use crate::{
-    config::CONFIG,
-    types::{Contract, EtlResult, Transaction},
-};
+use crate::{config::CONFIG, types::EtlResult};
 use anyhow::Result;
 use deadpool_postgres::{Pool as PostgresPool, Runtime};
 use once_cell::sync::Lazy;
@@ -13,6 +10,37 @@ use tokio_postgres::NoTls;
 
 pub static POSTGRESQL_DUMPER: Lazy<PostgreSQLDumper> =
     Lazy::new(|| PostgreSQLDumper::new().expect("Failed to create PostgreSQLDumper"));
+
+pub trait Insertable {
+    const INSERT_QUERY: &'static str;
+    fn value(v: &Self) -> String;
+}
+
+pub struct InsertTree(HashMap<&'static str, Vec<String>>);
+
+impl InsertTree {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn insert<T: Insertable>(&mut self, v: &T) {
+        self.0
+            .entry(T::INSERT_QUERY)
+            .or_insert_with(Vec::new)
+            .push(T::value(v));
+    }
+
+    pub async fn execute<'a>(
+        &self,
+        transaction: &'a tokio_postgres::Transaction<'a>,
+    ) -> Result<()> {
+        for (query, values) in self.0.iter() {
+            let final_query = query.replace("{{values}}", &values.join(","));
+            transaction.execute(final_query.as_str(), &[]).await?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone)]
 pub struct PostgreSQLDumper {
@@ -33,11 +61,9 @@ impl PostgreSQLDumper {
     pub async fn insert_results(&self, results: &[EtlResult]) -> Result<()> {
         let mut key_to_set = HashSet::new();
 
-        let mut contracts: Vec<&Contract> = vec![];
-        let mut transactions: Vec<&Transaction> = vec![];
-
         let mut redis = self.redis_pool.aquire().await?;
         let mut postgres = self.postgres_pool.get().await?;
+        let mut insert_tree = InsertTree::new();
         for result in results {
             match result {
                 EtlResult::Contract(c) => {
@@ -45,18 +71,17 @@ impl PostgreSQLDumper {
                     let found_cache: Option<String> = redis.get::<&str, _>(&key).await?;
                     if found_cache.is_none() {
                         key_to_set.insert(key);
-                        contracts.push(c);
+                        insert_tree.insert(c)
                     };
                 }
                 EtlResult::Transaction(t) => {
-                    transactions.push(t);
+                    insert_tree.insert(t);
                 }
             }
         }
 
         let transaction = postgres.transaction().await?;
-        Contract::inserts(&contracts, &transaction).await?;
-        Transaction::inserts(&transactions, &transaction).await?;
+        insert_tree.execute(&transaction).await?;
         transaction.commit().await?;
 
         redis
