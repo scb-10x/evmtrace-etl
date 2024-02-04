@@ -3,12 +3,13 @@ use std::{
     net::Ipv4Addr,
     panic::{set_hook, take_hook},
     process::exit,
+    time::Duration,
 };
 
 use anyhow::{anyhow, Error, Result};
 use axum::{routing::get, serve, Router};
 use log::{debug, error, info, warn};
-use tokio::{net::TcpListener, select, spawn};
+use tokio::{net::TcpListener, select, spawn, time::Instant};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use zkscan_etl::{
@@ -59,6 +60,7 @@ async fn main() -> Result<(), Error> {
 
         let mut buffer = vec![];
         let mut latest_partition: Option<TopicCommiter> = None;
+        let mut last_commit = Instant::now();
         while let Ok((t, partition)) = rx.recv().await {
             buffer.extend(t);
 
@@ -80,11 +82,15 @@ async fn main() -> Result<(), Error> {
                 }
             }
 
+            let now = Instant::now();
             match latest_partition {
                 Some(l)
-                    if l.topic_id != partition.topic_id && partition.offset > l.offset + 100 =>
+                    if l.topic_id != partition.topic_id
+                        && partition.offset > l.offset + 100
+                        && last_commit.duration_since(now) > Duration::from_secs(1) =>
                 {
                     l.commit()?;
+                    last_commit = now;
                 }
                 _ => {}
             }
