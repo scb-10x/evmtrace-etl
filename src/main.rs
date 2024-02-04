@@ -16,7 +16,7 @@ use zkscan_etl::{
     api,
     channels::CHANNEL,
     config::CONFIG,
-    consumer::{TopicCommiter, BLOCK_CONSUMER},
+    consumer::{TopicCommiter, BLOCK_CONSUMER, TRACE_CONSUMER},
     dumper::POSTGRESQL_DUMPER,
 };
 
@@ -112,7 +112,7 @@ async fn main() -> Result<(), Error> {
     });
 
     match select! {
-        //e = TRACE_CONSUMER.poll() => e,
+        e = TRACE_CONSUMER.poll() => e,
         e = BLOCK_CONSUMER.poll() => e,
         e = handle_log => e,
         e = handle_dump => e,

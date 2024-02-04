@@ -1,6 +1,5 @@
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData, pin::Pin, sync::Arc};
 
-use alloy_primitives::Address;
 use anyhow::{anyhow, bail, Result};
 use futures_util::{stream::BoxStream, Future, StreamExt};
 use rdkafka::{
@@ -19,20 +18,6 @@ mod block;
 mod trace;
 pub use block::*;
 pub use trace::*;
-
-pub const EC_MUL_ADDRESS: Address = Address::new([
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 6 bytes
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 12 bytes
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 18 bytes
-    0x00, 0x07, // 24 bytes
-]);
-
-pub const EC_PAIRING_ADDRESS: Address = Address::new([
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 6 bytes
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 12 bytes
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 18 bytes
-    0x00, 0x08, // 24 bytes
-]);
 
 type ArcConsumer = Arc<StreamConsumer<DefaultConsumerContext, DefaultRuntime>>;
 pub struct KafkaStreamConsumer<T> {

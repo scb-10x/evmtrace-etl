@@ -24,6 +24,8 @@ strike! {
             pub address: Address,
             pub function_signatures: HashSet<B32>,
             pub degree: u8,
+            pub ec_recover_count: u16,
+            pub ec_add_count: u16,
             pub ec_mul_count: u16,
             pub ec_pairing_count: u16,
             /// The size of the input to the pairing operation in bytes
@@ -179,7 +181,7 @@ impl Insertable for Transaction {
 impl Insertable for Contract {
     const INSERT_QUERY: &'static str = "INSERT INTO contracts (
         chain_id, address, function_signatures, degree,
-        ec_mul_count, ec_pairing_count, ec_pairing_input_sizes, call
+        ec_recover_count, ec_add_count, ec_mul_count, ec_pairing_count, ec_pairing_input_sizes, call
     ) VALUES {values} ON CONFLICT (chain_id, address, function_signatures) DO NOTHING";
 
     fn value(v: &Self) -> String {
