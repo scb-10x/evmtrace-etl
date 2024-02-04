@@ -4,7 +4,7 @@ use alloy_primitives::{aliases::B32, Address};
 
 use crate::{
     consumer::{EC_MUL_ADDRESS, EC_PAIRING_ADDRESS},
-    traces::{Contract, GasUsed, Trace, TraceResult, Transaction},
+    types::{Contract, EtlResult, GasUsed, Trace, Transaction},
 };
 
 pub struct TraceTree {
@@ -34,7 +34,7 @@ impl TraceTree {
         }
     }
 
-    pub fn commit(&self) -> Option<Vec<TraceResult>> {
+    pub fn commit(&self) -> Option<Vec<EtlResult>> {
         if let (
             Some(Trace {
                 transaction_hash: Some(tx_hash),
@@ -68,7 +68,7 @@ impl TraceTree {
                 .copied()
                 .collect();
 
-            let contracts: Vec<TraceResult> = first_degree_callers
+            let contracts: Vec<EtlResult> = first_degree_callers
                 .iter()
                 .map(|e| (e, 0, HashSet::from([EC_PAIRING_ADDRESS])))
                 .chain(second_degree_callers.iter().map(|e| (e, 1, HashSet::new())))
@@ -131,7 +131,7 @@ impl TraceTree {
                 .flat_map(|e| e.values())
                 .sum();
 
-            let transaction: TraceResult = Transaction {
+            let transaction: EtlResult = Transaction {
                 chain_id: self.chain_id,
                 from_address: *from_address,
                 to_address: *to_address,

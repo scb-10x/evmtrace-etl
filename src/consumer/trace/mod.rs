@@ -1,36 +1,32 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
-use anyhow::{anyhow, bail, Result};
-use futures_util::StreamExt;
+use anyhow::Result;
+use futures_util::{stream::BoxStream, StreamExt};
 use log::info;
 use once_cell::sync::Lazy;
 use rdkafka::{
     config::FromClientConfig,
-    consumer::{CommitMode, Consumer, DefaultConsumerContext, StreamConsumer},
+    consumer::{Consumer, DefaultConsumerContext, StreamConsumer},
     util::DefaultRuntime,
-    Message, Offset, TopicPartitionList,
-};
-use serde_json::from_str;
-use tokio::{
-    spawn,
-    task::{JoinHandle, JoinSet},
+    TopicPartitionList,
 };
 
 use crate::{
-    channels::CHANNEL, config::CONFIG, consumer::trace::trace_tree::TraceTree, traces::Trace,
+    channels::CHANNEL, config::CONFIG, consumer::trace::trace_tree::TraceTree, types::Trace,
 };
+
+use super::{KafkaConsumer, KafkaStreamConsumer};
 
 mod trace_tree;
 
 pub static TRACE_CONSUMER: Lazy<TraceConsumer> = Lazy::new(|| TraceConsumer::new());
 
-pub type TraceStreamConsumer = Arc<StreamConsumer<DefaultConsumerContext, DefaultRuntime>>;
-pub struct TraceConsumer {
-    consumers: HashMap<&'static str, (u64, TraceStreamConsumer)>,
-}
+pub type TraceConsumer = KafkaStreamConsumer<Trace>;
 
-impl TraceConsumer {
-    pub fn new() -> Self {
+impl KafkaConsumer for TraceConsumer {
+    type Data = Trace;
+
+    fn new() -> Self {
         let config = CONFIG.kafka_config();
         let consumers = CONFIG
             .chains
@@ -45,63 +41,36 @@ impl TraceConsumer {
                 (c.kafka_trace_topic.as_str(), (c.id, Arc::new(consumer)))
             })
             .collect::<HashMap<_, _>>();
-        Self { consumers }
-    }
-
-    pub fn commit(&self, topic_id: &str, topic_partition_list: TopicPartitionList) -> Result<()> {
-        if let Some((_, consumer)) = self.consumers.get(topic_id) {
-            consumer.commit(&topic_partition_list, CommitMode::Async)?;
+        Self {
+            consumers,
+            _data: PhantomData,
         }
-        Ok(())
     }
 
-    pub fn poll(&self) -> JoinHandle<Result<()>> {
-        let mut set = JoinSet::<Result<()>>::new();
-        for (topic_id, (chain_id, consumer)) in &self.consumers {
-            let topic_id = *topic_id;
-            let chain_id = *chain_id;
-            let consumer = consumer.clone();
-            set.spawn(async move {
-                let mut trace_tree = TraceTree::new(topic_id, chain_id);
+    fn handle_data_stream<'a>(
+        topic_id: &'static str,
+        chain_id: u64,
+        mut stream: BoxStream<'a, Result<(Trace, TopicPartitionList)>>,
+    ) -> std::pin::Pin<Box<dyn futures::prelude::Future<Output = Result<()>> + Send + 'a>>
+    where
+        Self: Sync + 'a,
+    {
+        Box::pin(async move {
+            let mut trace_tree = TraceTree::new(topic_id, chain_id);
 
-                let mut stream = consumer.stream();
-                info!("Starting trace consumer for {}", topic_id);
-                while let Some(msg) = stream.next().await {
-                    let m = msg?;
-                    let payload = m
-                        .payload_view::<str>()
-                        .and_then(|p| p.ok())
-                        .ok_or_else(|| anyhow!("Invalid payload"))?;
-                    let trace = from_str::<Trace>(payload)
-                        .map_err(|e| anyhow!("Serialization Error: {e}, original {payload}"))?;
+            info!("Starting trace consumer for {}", topic_id);
+            while let Some(t) = stream.next().await {
+                let (trace, tpl) = t?;
 
-                    if trace.trace_address.is_empty() {
-                        if let Some(results) = trace_tree.commit() {
-                            let mut topic_partition = TopicPartitionList::new();
-                            topic_partition.add_partition_offset(
-                                m.topic(),
-                                m.partition(),
-                                Offset::from_raw(m.offset() - 1),
-                            )?;
-                            CHANNEL.send_result(results, (topic_id, topic_partition));
-                        }
-
-                        trace_tree.reset(&trace);
+                if trace.trace_address.is_empty() {
+                    if let Some(results) = trace_tree.commit() {
+                        CHANNEL.send_result(results, (topic_id, tpl));
                     }
 
-                    trace_tree.add_trace(trace);
+                    trace_tree.reset(&trace);
                 }
-                Ok(())
-            });
-        }
 
-        spawn(async move {
-            while let Some(r) = set.join_next().await {
-                match r {
-                    Err(e) => bail!(e),
-                    Ok(Err(e)) => bail!(e),
-                    _ => {}
-                };
+                trace_tree.add_trace(trace);
             }
             Ok(())
         })

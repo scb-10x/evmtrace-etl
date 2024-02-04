@@ -5,12 +5,12 @@ use tokio::{
     sync::broadcast::{channel, Sender},
 };
 
-use crate::traces::TraceResult;
+use crate::types::EtlResult;
 
 pub static CHANNEL: Lazy<Channel> = Lazy::new(|| Channel::new());
 
 pub struct Channel {
-    pub result_tx: Sender<(Vec<TraceResult>, (&'static str, TopicPartitionList))>,
+    pub result_tx: Sender<(Vec<EtlResult>, (&'static str, TopicPartitionList))>,
 }
 
 impl Channel {
@@ -21,7 +21,7 @@ impl Channel {
 
     pub fn send_result(
         &self,
-        result: Vec<TraceResult>,
+        result: Vec<EtlResult>,
         topic_partition_list: (&'static str, TopicPartitionList),
     ) {
         let result_tx = self.result_tx.clone();

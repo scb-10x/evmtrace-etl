@@ -10,7 +10,7 @@ use structstruck::strike;
 
 strike! {
     #[strikethrough[derive(Debug, Clone, Serialize, Deserialize)]]
-    pub enum TraceResult {
+    pub enum EtlResult {
         /// Contract result
         Contract(struct {
             pub chain_id: u64,
@@ -47,13 +47,13 @@ strike! {
     }
 }
 
-impl From<Transaction> for TraceResult {
+impl From<Transaction> for EtlResult {
     fn from(value: Transaction) -> Self {
         Self::Transaction(value)
     }
 }
 
-impl From<Contract> for TraceResult {
+impl From<Contract> for EtlResult {
     fn from(value: Contract) -> Self {
         Self::Contract(value)
     }
@@ -79,7 +79,7 @@ impl Display for Transaction {
     }
 }
 
-impl Display for TraceResult {
+impl Display for EtlResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Contract(contract) => write!(f, "Contract: {}", contract),
@@ -88,7 +88,7 @@ impl Display for TraceResult {
     }
 }
 
-impl TraceResult {
+impl EtlResult {
     pub fn chain_id(&self) -> u64 {
         match self {
             Self::Contract(contract) => contract.chain_id,

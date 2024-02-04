@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     config::CONFIG,
-    traces::{Contract, TraceResult, Transaction},
+    types::{Contract, EtlResult, Transaction},
 };
 use anyhow::Result;
 use deadpool_postgres::{Pool as PostgresPool, Runtime};
@@ -30,7 +30,7 @@ impl PostgreSQLDumper {
         })
     }
 
-    pub async fn insert_results(&self, results: &[TraceResult]) -> Result<()> {
+    pub async fn insert_results(&self, results: &[EtlResult]) -> Result<()> {
         let mut key_to_set = HashSet::new();
 
         let mut contracts: Vec<&Contract> = vec![];
@@ -40,7 +40,7 @@ impl PostgreSQLDumper {
         let mut postgres = self.postgres_pool.get().await?;
         for result in results {
             match result {
-                TraceResult::Contract(c) => {
+                EtlResult::Contract(c) => {
                     let key = c.cache_key();
                     let found_cache: Option<String> = redis.get::<&str, _>(&key).await?;
                     if found_cache.is_none() {
@@ -48,7 +48,7 @@ impl PostgreSQLDumper {
                         contracts.push(c);
                     };
                 }
-                TraceResult::Transaction(t) => {
+                EtlResult::Transaction(t) => {
                     transactions.push(t);
                 }
             }

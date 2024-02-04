@@ -27,17 +27,17 @@ strike! {
         pub chains: Vec<pub struct {
             pub id: u64,
             pub kafka_trace_topic: String,
-            pub kafka_block_topic: Option<String>,
+            pub kafka_block_topic: String,
         }>,
     }
 }
 
 impl Chains {
-    pub fn trace<T: ToString>(id: u64, topic: T) -> Self {
+    pub fn trace<T: ToString>(id: u64, trace_topic: T, block_topic: T) -> Self {
         Chains {
             id,
-            kafka_trace_topic: topic.to_string(),
-            kafka_block_topic: None,
+            kafka_trace_topic: trace_topic.to_string(),
+            kafka_block_topic: block_topic.to_string(),
         }
     }
 }
@@ -59,13 +59,13 @@ impl Config {
             },
             redis: var("REDIS_URL").expect("REDIS_URL must be set"),
             chains: vec![
-                Chains::trace(1, "ethereum_traces"),
-                Chains::trace(42161, "arbitrum_traces"),
-                Chains::trace(10, "optimism_traces"),
-                Chains::trace(137, "polygon_traces"),
-                Chains::trace(43114, "avalanche_traces"),
-                Chains::trace(8453, "base_traces"),
-                Chains::trace(56, "bsc_traces"),
+                Chains::trace(1, "ethereum_traces", "ethereum_blocks"),
+                Chains::trace(42161, "arbitrum_traces", "arbitrum_blocks"),
+                Chains::trace(10, "optimism_traces", "optimism_blocks"),
+                //Chains::trace(137, "polygon_traces"),
+                //Chains::trace(43114, "avalanche_traces"),
+                //Chains::trace(8453, "base_traces"),
+                //Chains::trace(56, "bsc_traces"),
             ],
         }
     }
