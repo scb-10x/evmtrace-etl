@@ -6,7 +6,7 @@ use rdkafka::ClientConfig;
 use serde::{Deserialize, Serialize};
 use structstruck::strike;
 
-pub static CONFIG: Lazy<Config> = Lazy::new(|| Config::new());
+pub static CONFIG: Lazy<Config> = Lazy::new(Config::new);
 
 strike! {
     #[strikethrough[derive(Debug, Clone, Serialize, Deserialize)]]
@@ -78,13 +78,19 @@ impl Config {
     }
 }
 
-impl Into<PostgresConfig> for &Config {
-    fn into(self) -> PostgresConfig {
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<&Config> for PostgresConfig {
+    fn from(val: &Config) -> Self {
         PostgresConfig {
-            host: Some(self.postgres.host.to_string()),
-            user: Some(self.postgres.username.to_string()),
-            password: Some(self.postgres.password.to_string()),
-            dbname: Some(self.postgres.db.to_string()),
+            host: Some(val.postgres.host.to_string()),
+            user: Some(val.postgres.username.to_string()),
+            password: Some(val.postgres.password.to_string()),
+            dbname: Some(val.postgres.db.to_string()),
             manager: Some(ManagerConfig {
                 recycling_method: RecyclingMethod::Fast,
             }),
@@ -93,15 +99,15 @@ impl Into<PostgresConfig> for &Config {
     }
 }
 
-impl Into<ClientConfig> for &Config {
-    fn into(self) -> ClientConfig {
+impl From<&Config> for ClientConfig {
+    fn from(val: &Config) -> Self {
         let mut config = ClientConfig::new();
-        config.set("bootstrap.servers", self.kafka.url.as_str());
+        config.set("bootstrap.servers", val.kafka.url.as_str());
         config.set("security.protocol", "SASL_PLAINTEXT");
         config.set("sasl.mechanisms", "SCRAM-SHA-256");
-        config.set("group.id", self.kafka.group_id.as_str());
-        config.set("sasl.username", self.kafka.username.as_str());
-        config.set("sasl.password", self.kafka.password.as_str());
+        config.set("group.id", val.kafka.group_id.as_str());
+        config.set("sasl.username", val.kafka.username.as_str());
+        config.set("sasl.password", val.kafka.password.as_str());
         config.set("auto.offset.reset", "earliest");
         config.set("socket.timeout.ms", "20000");
         config.set("session.timeout.ms", "60000");

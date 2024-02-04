@@ -19,7 +19,7 @@ use super::{KafkaConsumer, KafkaStreamConsumer};
 
 mod trace_tree;
 
-pub static TRACE_CONSUMER: Lazy<TraceConsumer> = Lazy::new(|| TraceConsumer::new());
+pub static TRACE_CONSUMER: Lazy<TraceConsumer> = Lazy::new(TraceConsumer::new);
 
 pub type TraceConsumer = KafkaStreamConsumer<Trace>;
 

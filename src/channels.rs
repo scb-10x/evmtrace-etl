@@ -7,7 +7,7 @@ use tokio::{
 
 use crate::types::EtlResult;
 
-pub static CHANNEL: Lazy<Channel> = Lazy::new(|| Channel::new());
+pub static CHANNEL: Lazy<Channel> = Lazy::new(Channel::new);
 
 pub struct Channel {
     pub result_tx: Sender<(Vec<EtlResult>, (&'static str, TopicPartitionList))>,
@@ -30,5 +30,11 @@ impl Channel {
                 .send((result, topic_partition_list))
                 .expect("Failed to send result");
         });
+    }
+}
+
+impl Default for Channel {
+    fn default() -> Self {
+        Self::new()
     }
 }

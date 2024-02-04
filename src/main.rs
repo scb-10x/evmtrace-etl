@@ -51,17 +51,15 @@ async fn main() -> Result<(), Error> {
         let mut rx = CHANNEL.result_tx.subscribe();
 
         let mut buffer = vec![];
-        let mut latest_partition: (&str, TopicPartitionList);
+        let mut latest_partition: Option<(&str, TopicPartitionList)> = None;
         while let Ok((t, partition)) = rx.recv().await {
             buffer.extend(t);
-            latest_partition = partition;
 
             match (!rx.is_empty(), buffer.len() > 1000) {
                 (true, false) => continue,
                 _ => {
                     let buffer_len = buffer.len();
                     POSTGRESQL_DUMPER.insert_results(&buffer).await?;
-                    TRACE_CONSUMER.commit(latest_partition.0, latest_partition.1)?;
                     buffer.clear();
 
                     let current_rx_len = rx.len();
@@ -74,6 +72,14 @@ async fn main() -> Result<(), Error> {
                     }
                 }
             }
+
+            match latest_partition {
+                Some(l) if l.0 != partition.0 => {
+                    TRACE_CONSUMER.commit(l.0, l.1)?;
+                }
+                _ => {}
+            }
+            latest_partition = Some(partition);
         }
 
         Result::<()>::Ok(())
