@@ -15,8 +15,8 @@ strike! {
     #[strikethrough[derive(Debug, Clone, Serialize, Deserialize)]]
     pub enum EtlResult {
         BlockWithChainId(struct {
-            chain_id: u64,
-            block: Block,
+            pub chain_id: u64,
+            pub block: Block,
         }),
         /// Contract result
         Contract(struct {
@@ -64,6 +64,12 @@ impl From<Transaction> for EtlResult {
 impl From<Contract> for EtlResult {
     fn from(value: Contract) -> Self {
         Self::Contract(value)
+    }
+}
+
+impl From<BlockWithChainId> for EtlResult {
+    fn from(value: BlockWithChainId) -> Self {
+        Self::BlockWithChainId(value)
     }
 }
 
@@ -219,22 +225,9 @@ impl Contract {
 }
 
 impl Insertable for BlockWithChainId {
-    const INSERT_QUERY: &'static str = "INSERT INTO block (number, timestamp, hash, parent_hash, transaction_count, nonce, miner, difficulty, total_difficulty, size, gas_limit, gas_used, base_fee_per_gas, chain_id)
+    const INSERT_QUERY: &'static str = "INSERT INTO blocks (chain_id, number, timestamp, hash, parent_hash, transaction_count, nonce, miner, difficulty, total_difficulty, size, gas_limit, gas_used, base_fee_per_gas)
     VALUES {values} 
-    ON CONFLICT (chain_id, number) DO UPDATE
-    SET
-        timestamp = EXCLUDED.timestamp,
-        hash = EXCLUDED.hash,
-        parent_hash = EXCLUDED.parent_hash,
-        transaction_count = EXCLUDED.transaction_count,
-        nonce = EXCLUDED.nonce,
-        miner = EXCLUDED.miner,
-        difficulty = EXCLUDED.difficulty,
-        total_difficulty = EXCLUDED.total_difficulty,
-        size = EXCLUDED.size,
-        gas_limit = EXCLUDED.gas_limit,
-        gas_used = EXCLUDED.gas_used,
-        base_fee_per_gas = EXCLUDED.base_fee_per_gas";
+    ON CONFLICT (chain_id, number) DO NOTHING";
 
     fn value(v: &Self) -> String {
         format!(

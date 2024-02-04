@@ -10,7 +10,11 @@ use rdkafka::{
     util::DefaultRuntime,
 };
 
-use crate::{config::CONFIG, types::Block};
+use crate::{
+    channels::CHANNEL,
+    config::CONFIG,
+    types::{Block, BlockWithChainId},
+};
 
 use super::{KafkaConsumer, KafkaStreamConsumer, TopicCommiter};
 
@@ -43,7 +47,7 @@ impl KafkaConsumer for BlockConsumer {
 
     fn handle_data_stream<'a>(
         topic_id: &'static str,
-        _chain_id: u64,
+        chain_id: u64,
         mut stream: BoxStream<'a, Result<(Self::Data, TopicCommiter)>>,
     ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>>
     where
@@ -52,9 +56,8 @@ impl KafkaConsumer for BlockConsumer {
         Box::pin(async move {
             info!("Starting block consumer for {}", topic_id);
             while let Some(t) = stream.next().await {
-                let (block, _) = t?;
-
-                info!("Received block from {}: {}", topic_id, block);
+                let (block, tc) = t?;
+                CHANNEL.send_result(vec![BlockWithChainId { chain_id, block }.into()], tc);
             }
             Ok(())
         })

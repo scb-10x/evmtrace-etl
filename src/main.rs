@@ -62,7 +62,7 @@ async fn main() -> Result<(), Error> {
         while let Ok((t, partition)) = rx.recv().await {
             buffer.extend(t);
 
-            match (!rx.is_empty(), buffer.len() > 1000) {
+            match (!rx.is_empty(), buffer.len() > 20000) {
                 (true, false) => continue,
                 _ => {
                     let buffer_len = buffer.len();
@@ -81,7 +81,9 @@ async fn main() -> Result<(), Error> {
             }
 
             match latest_partition {
-                Some(l) if l.topic_id != partition.topic_id => {
+                Some(l)
+                    if l.topic_id != partition.topic_id && partition.offset > l.offset + 100 =>
+                {
                     l.commit()?;
                 }
                 _ => {}

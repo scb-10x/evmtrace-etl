@@ -78,6 +78,7 @@ where
                                     Ok(())
                                 })
                             },
+                            offset: m.offset(),
                         },
                     ))
                 });
@@ -116,6 +117,7 @@ pub trait KafkaConsumer {
 pub struct TopicCommiter {
     pub chain_id: u64,
     pub topic_id: &'static str,
+    pub offset: i64,
     pub commit_fn: Arc<dyn Fn() -> Result<()> + Send + Sync>,
 }
 

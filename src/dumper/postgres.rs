@@ -33,7 +33,7 @@ impl InsertTree {
         transaction: &'a tokio_postgres::Transaction<'a>,
     ) -> Result<()> {
         for (query, values) in self.0.iter() {
-            let final_query = query.replace("{{values}}", &values.join(","));
+            let final_query = query.replace("{values}", &values.join(","));
             transaction.execute(final_query.as_str(), &[]).await?;
         }
         Ok(())
