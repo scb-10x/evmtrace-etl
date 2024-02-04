@@ -186,7 +186,7 @@ impl Insertable for Contract {
 
     fn value(v: &Self) -> String {
         format!(
-            "({},'{}','{{{}}}',{}, {}, {}, '{{{}}}', '{{{}}}')",
+            "({},'{}','{{{}}}',{},{},{},{},{}, '{{{}}}', '{{{}}}')",
             v.chain_id,
             v.address,
             v.function_signatures
@@ -195,6 +195,8 @@ impl Insertable for Contract {
                 .collect::<Vec<_>>()
                 .join(","),
             v.degree,
+            v.ec_recover_count,
+            v.ec_add_count,
             v.ec_mul_count,
             v.ec_pairing_count,
             v.ec_pairing_input_sizes

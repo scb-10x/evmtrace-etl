@@ -93,10 +93,9 @@ impl TraceTree {
             let mut first_degree_callers = HashMap::<Address, HashSet<Address>>::new();
             Self::FIRST_DEGREE_FILTER_ADDRESSES.iter().for_each(|a| {
                 self.call_tree.get(a).map(|m| {
-                    first_degree_callers
-                        .entry(*a)
-                        .or_default()
-                        .extend(m.keys().copied());
+                    m.keys().for_each(|k| {
+                        first_degree_callers.entry(*k).or_default().insert(*a);
+                    });
                 });
             });
 
@@ -104,10 +103,9 @@ impl TraceTree {
             let mut second_degree_callers = HashMap::<Address, HashSet<Address>>::new();
             first_degree_callers.iter().for_each(|(a, _)| {
                 self.call_tree.get(a).map(|m| {
-                    second_degree_callers
-                        .entry(*a)
-                        .or_default()
-                        .extend(m.keys().copied());
+                    m.keys().for_each(|k| {
+                        second_degree_callers.entry(*k).or_default().insert(*a);
+                    });
                 });
             });
 
