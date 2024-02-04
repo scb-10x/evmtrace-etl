@@ -108,6 +108,8 @@ impl TraceTree {
                     });
                 });
             });
+            // Remove eoa from second degree callers
+            second_degree_callers.remove(from_address);
 
             // Construct the contracts
             let contracts: Vec<EtlResult> = first_degree_callers
