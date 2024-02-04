@@ -13,7 +13,7 @@ use tokio::{net::TcpListener, select, spawn, time::Instant};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use zkscan_etl::{
-    api,
+    api::{self, STATS},
     channels::CHANNEL,
     config::CONFIG,
     consumer::{TopicCommiter, BLOCK_CONSUMER, TRACE_CONSUMER},
@@ -114,6 +114,7 @@ async fn main() -> Result<(), Error> {
     match select! {
         e = TRACE_CONSUMER.poll() => e,
         e = BLOCK_CONSUMER.poll() => e,
+        e = STATS.watch() => e,
         e = handle_log => e,
         e = handle_dump => e,
         e = server => e,

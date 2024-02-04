@@ -1,19 +1,95 @@
-use axum::{http::StatusCode, routing::get, Json, Router};
-use serde_json::{json, Value};
+use std::{collections::HashMap, sync::Arc};
 
-use crate::channels::CHANNEL;
+use anyhow::Result;
+use axum::{http::StatusCode, routing::get, Json, Router};
+use once_cell::sync::Lazy;
+use serde_json::{json, Map, Value};
+use tokio::{spawn, sync::RwLock, task::JoinHandle};
+
+use crate::{channels::CHANNEL, types::EtlResult};
+
+pub static STATS: Lazy<Stats> = Lazy::new(Stats::new);
+pub struct Stats(Arc<RwLock<HashMap<(&'static str, Option<String>), u64>>>);
+
+impl Stats {
+    pub fn new() -> Self {
+        Self(Arc::new(RwLock::new(HashMap::new())))
+    }
+
+    pub async fn read(&self) -> Vec<(String, Value)> {
+        let stats = self.0.read().await;
+        stats
+            .iter()
+            .map(|(k, v)| {
+                (
+                    match k.1 {
+                        Some(ref chain_id) => format!("{}_{}", k.0, chain_id),
+                        None => k.0.to_string(),
+                    },
+                    json!(*v),
+                )
+            })
+            .collect()
+    }
+
+    pub fn watch(&self) -> JoinHandle<Result<()>> {
+        let stats = self.0.clone();
+        spawn(async move {
+            let mut rx = CHANNEL.result_tx.subscribe();
+            while let Ok((results, tc)) = rx.recv().await {
+                for result in results {
+                    match result {
+                        EtlResult::BlockWithChainId(b) => {
+                            stats
+                                .write()
+                                .await
+                                .entry(("latest_block", Some(b.chain_id.to_string())))
+                                .and_modify(|v| *v = b.block.number)
+                                .or_insert(b.block.number);
+                        }
+                        EtlResult::Transaction(tx) => {
+                            stats
+                                .write()
+                                .await
+                                .entry(("latest_transaction_block", Some(tx.chain_id.to_string())))
+                                .and_modify(|v| *v = tx.block_number)
+                                .or_insert(tx.block_number);
+                        }
+                        _ => {}
+                    };
+                }
+
+                stats
+                    .write()
+                    .await
+                    .insert((tc.topic_id, None), tc.offset as u64);
+            }
+
+            Ok(())
+        })
+    }
+
+    pub fn queue() -> usize {
+        CHANNEL.result_tx.len()
+    }
+}
 
 pub fn routes() -> Router {
     Router::new().route("/health", get(health))
 }
 
 pub async fn health() -> (StatusCode, Json<Value>) {
-    let trace_queue = CHANNEL.result_tx.len();
+    let mut output = Map::<String, Value>::new();
+    output.insert("queue".to_string(), json!(Stats::queue()));
+    for (k, v) in STATS.read().await {
+        output.insert(k, v);
+    }
+
     (
         StatusCode::OK,
         Json(json!({
-            "message": "OK",
-            "trace_dump_queue": trace_queue,
+            "health": "OK",
+            "stats": output,
         })),
     )
 }
