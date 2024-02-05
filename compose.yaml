@@ -5,3 +5,5 @@ services:
       context: .
       target: builder
     command: cargo run --release
+    ports:
+      - "${PORT}:${PORT}"

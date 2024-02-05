@@ -18,8 +18,10 @@ COPY . .
 RUN cargo build --release --bin $APP_NAME
 
 ARG APP_NAME
+ENV PORT=8080
 # We do not need the Rust toolchain to run the binary!
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 COPY --from=builder /app/target/release/$APP_NAME /usr/local/bin
+EXPOSE $PORT
 ENTRYPOINT ["/usr/local/bin/$APP_NAME"]
