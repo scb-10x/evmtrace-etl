@@ -7,3 +7,5 @@ services:
     command: cargo run --release
     ports:
       - "${PORT}:${PORT}"
+    env_file:
+      - .env

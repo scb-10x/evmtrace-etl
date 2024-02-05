@@ -1,5 +1,5 @@
 FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
-RUN apt update && apt install -y cmake capnproto libsasl2-dev
+RUN apt update && apt install -y cmake capnproto libsasl2-dev libsasl2-2
 WORKDIR /app
 
 FROM chef AS planner
