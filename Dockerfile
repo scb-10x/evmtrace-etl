@@ -20,4 +20,4 @@ WORKDIR /app
 COPY --from=builder /app/target/release/zkscan-etl /usr/local/bin
 ENV PORT=8080
 EXPOSE $PORT
-ENTRYPOINT ["/usr/local/bin/$APP_NAME"]
+ENTRYPOINT ["/usr/local/bin/zkscan-etl"]
