@@ -147,33 +147,33 @@ impl Insertable for Transaction {
         gas_used_requested, gas_used_total, gas_used_first_degree, gas_used_second_degree
     ) VALUES {values} ON CONFLICT (chain_id, transaction_hash) DO NOTHING";
 
-    fn value(v: &Self) -> String {
+    fn value(&self) -> String {
         format!(
             "({},'{}','{}','{{{}}}','{}','{}',{},{},{},{},{},'{}',{},{},{},{})",
-            v.chain_id,
-            v.from_address,
-            v.to_address,
-            v.closest_address
+            self.chain_id,
+            self.from_address,
+            self.to_address,
+            self.closest_address
                 .iter()
                 .map(|e| format!("\"{}\"", e))
                 .collect::<Vec<_>>()
                 .join(","),
-            v.function_signature,
-            v.transaction_hash,
-            v.transaction_index,
-            v.block_number,
-            v.block_timestamp
+            self.function_signature,
+            self.transaction_hash,
+            self.transaction_index,
+            self.block_number,
+            self.block_timestamp
                 .map(|e| format!("'{}'", e))
                 .unwrap_or("NULL".to_string()), // Handle Option<u64> appropriately
-            v.block_hash
+            self.block_hash
                 .map(|e| format!("'{}'", e))
                 .unwrap_or("NULL".to_string()), // Handle Option<B256> appropriately
-            v.value,
-            v.input,
-            v.gas_used.requested,
-            v.gas_used.total,
-            v.gas_used.first_degree,
-            v.gas_used.second_degree
+            self.value,
+            self.input,
+            self.gas_used.requested,
+            self.gas_used.total,
+            self.gas_used.first_degree,
+            self.gas_used.second_degree
         )
     }
 }
@@ -184,27 +184,27 @@ impl Insertable for Contract {
         ec_recover_count, ec_add_count, ec_mul_count, ec_pairing_count, ec_pairing_input_sizes, call
     ) VALUES {values} ON CONFLICT (chain_id, address, function_signatures) DO NOTHING";
 
-    fn value(v: &Self) -> String {
+    fn value(&self) -> String {
         format!(
             "({},'{}','{{{}}}',{},{},{},{},{}, '{{{}}}', '{{{}}}')",
-            v.chain_id,
-            v.address,
-            v.function_signatures
+            self.chain_id,
+            self.address,
+            self.function_signatures
                 .iter()
                 .map(|e| format!("\"{}\"", e))
                 .collect::<Vec<_>>()
                 .join(","),
-            v.degree,
-            v.ec_recover_count,
-            v.ec_add_count,
-            v.ec_mul_count,
-            v.ec_pairing_count,
-            v.ec_pairing_input_sizes
+            self.degree,
+            self.ec_recover_count,
+            self.ec_add_count,
+            self.ec_mul_count,
+            self.ec_pairing_count,
+            self.ec_pairing_input_sizes
                 .iter()
-                .map(|v| v.to_string())
+                .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(","),
-            v.call
+            self.call
                 .iter()
                 .map(|e| format!("\"{}\"", e))
                 .collect::<Vec<_>>()
@@ -245,23 +245,29 @@ impl Insertable for BlockWithChainId {
     gas_used = EXCLUDED.gas_used,
     base_fee_per_gas = EXCLUDED.base_fee_per_gas";
 
-    fn value(v: &Self) -> String {
+    fn value(&self) -> String {
         format!(
             "({},{},{},'{}','{}',{},'{}','{}',{},{},{},{},{},{})",
-            v.chain_id,
-            v.block.number,
-            v.block.timestamp,
-            v.block.hash,
-            v.block.parent_hash,
-            v.block.transaction_count,
-            v.block.nonce,
-            v.block.miner,
-            v.block.difficulty,
-            v.block.total_difficulty,
-            v.block.size,
-            v.block.gas_limit,
-            v.block.gas_used,
-            v.block.base_fee_per_gas,
+            self.chain_id,
+            self.block.number,
+            self.block.timestamp,
+            self.block.hash,
+            self.block.parent_hash,
+            self.block.transaction_count,
+            self.block.nonce,
+            self.block.miner,
+            self.block.difficulty,
+            self.block.total_difficulty,
+            self.block.size,
+            self.block.gas_limit,
+            self.block.gas_used,
+            self.block.base_fee_per_gas,
         )
+    }
+
+    fn remove_duplicates(v: &mut Vec<String>) {
+        v.reverse();
+        v.dedup_by(|v1, v2| v1.split(',').take(2).eq(v2.split(',').take(2)));
+        v.reverse();
     }
 }

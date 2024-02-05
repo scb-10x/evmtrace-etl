@@ -64,7 +64,7 @@ async fn main() -> Result<(), Error> {
         while let Ok((t, partition)) = rx.recv().await {
             buffer.extend(t);
 
-            match (!rx.is_empty(), buffer.len() > 20000) {
+            match (!rx.is_empty(), buffer.len() > 100_000) {
                 (true, false) => continue,
                 _ => {
                     let buffer_len = buffer.len();

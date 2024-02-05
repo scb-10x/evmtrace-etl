@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::{config::CONFIG, types::EtlResult};
 use anyhow::Result;
@@ -8,37 +8,14 @@ use redis::{AsyncCommands, Client as RedisClient};
 use redis_pool::{RedisPool, SingleRedisPool};
 use tokio_postgres::NoTls;
 
+mod insert_tree;
+mod insertable;
+pub use insertable::*;
+
+use self::insert_tree::InsertTree;
+
 pub static POSTGRESQL_DUMPER: Lazy<PostgreSQLDumper> =
     Lazy::new(|| PostgreSQLDumper::new().expect("Failed to create PostgreSQLDumper"));
-
-pub trait Insertable {
-    const INSERT_QUERY: &'static str;
-    fn value(v: &Self) -> String;
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct InsertTree(HashMap<&'static str, Vec<String>>);
-
-impl InsertTree {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    pub fn insert<T: Insertable>(&mut self, v: &T) {
-        self.0.entry(T::INSERT_QUERY).or_default().push(T::value(v));
-    }
-
-    pub async fn execute<'a>(
-        &self,
-        transaction: &'a tokio_postgres::Transaction<'a>,
-    ) -> Result<()> {
-        for (query, values) in self.0.iter() {
-            let final_query = query.replace("{values}", &values.join(","));
-            transaction.execute(final_query.as_str(), &[]).await?;
-        }
-        Ok(())
-    }
-}
 
 #[derive(Clone)]
 pub struct PostgreSQLDumper {
@@ -90,8 +67,7 @@ impl PostgreSQLDumper {
                     .map(|k| (k.as_str(), ""))
                     .collect::<Vec<_>>(),
             )
-            .await
-            .ok();
+            .await?;
 
         Ok(())
     }
