@@ -92,17 +92,21 @@ impl TraceTree {
             // (address, what it called)
             let mut first_degree_callers = HashMap::<Address, HashSet<Address>>::new();
             Self::FIRST_DEGREE_FILTER_ADDRESSES.iter().for_each(|a| {
-                if let Some(m) = self.call_tree.get(a) { m.keys().for_each(|k| {
+                if let Some(m) = self.call_tree.get(a) {
+                    m.keys().for_each(|k| {
                         first_degree_callers.entry(*k).or_default().insert(*a);
-                    }); }
+                    });
+                }
             });
 
             // Addresses that called the first_degree_callers
             let mut second_degree_callers = HashMap::<Address, HashSet<Address>>::new();
             first_degree_callers.iter().for_each(|(a, _)| {
-                if let Some(m) = self.call_tree.get(a) { m.keys().for_each(|k| {
+                if let Some(m) = self.call_tree.get(a) {
+                    m.keys().for_each(|k| {
                         second_degree_callers.entry(*k).or_default().insert(*a);
-                    }); }
+                    });
+                }
             });
             // Remove eoa from second degree callers
             second_degree_callers.remove(from_address);

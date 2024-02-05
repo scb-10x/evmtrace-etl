@@ -8,7 +8,10 @@ use tokio::{spawn, sync::RwLock, task::JoinHandle};
 use crate::{channels::CHANNEL, types::EtlResult};
 
 pub static STATS: Lazy<Stats> = Lazy::new(Stats::new);
-pub struct Stats(Arc<RwLock<HashMap<(&'static str, Option<String>), u64>>>);
+
+type StatsMap = Arc<RwLock<HashMap<(&'static str, Option<String>), u64>>>;
+#[derive(Debug, Default)]
+pub struct Stats(StatsMap);
 
 impl Stats {
     pub fn new() -> Self {
