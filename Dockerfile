@@ -15,7 +15,7 @@ COPY . .
 RUN cargo build --release --bin zkscan-etl
 
 # We do not need the Rust toolchain to run the binary!
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm AS runtime
 WORKDIR /app
 COPY --from=builder /app/target/release/zkscan-etl /usr/local/bin
 ENV PORT=8080
