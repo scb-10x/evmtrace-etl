@@ -27,7 +27,8 @@ pub struct TraceTree {
 }
 
 impl TraceTree {
-    const FIRST_DEGREE_FILTER_ADDRESSES: &[Address] = &[EC_PAIRING_ADDRESS, EC_RECOVER_ADDRESS];
+    const FIRST_DEGREE_FILTER_ADDRESSES: &'static [Address] =
+        &[EC_PAIRING_ADDRESS, EC_RECOVER_ADDRESS];
 
     pub fn new(topic_id: &'static str, chain_id: u64) -> Self {
         Self {
