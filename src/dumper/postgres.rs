@@ -60,6 +60,7 @@ impl PostgreSQLDumper {
         insert_tree.execute(&transaction).await?;
         transaction.commit().await?;
 
+        // Uses `ok` to ignore the result of the mset, sometimes redis raise args error
         redis
             .mset::<&str, &str, ()>(
                 &key_to_set
@@ -67,7 +68,8 @@ impl PostgreSQLDumper {
                     .map(|k| (k.as_str(), ""))
                     .collect::<Vec<_>>(),
             )
-            .await?;
+            .await
+            .ok();
 
         Ok(())
     }
