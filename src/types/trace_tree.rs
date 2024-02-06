@@ -3,7 +3,7 @@ use std::{
     iter,
 };
 
-use alloy_primitives::{aliases::B32, Address, Bytes};
+use ethers::types::{Address, Bytes, H32};
 
 use crate::{
     constants::addresses::{
@@ -13,14 +13,13 @@ use crate::{
 };
 
 pub struct TraceTree {
-    pub topic_id: &'static str,
     pub chain_id: u64,
     /// to_address -> from_address -> count
     pub call_tree: HashMap<Address, HashMap<Address, u16>>,
     /// from_address -> to_address -> gas_used
     pub gas_tree: HashMap<Address, HashMap<Address, u64>>,
     /// to_address -> function_signature
-    pub signature_tree: HashMap<Address, HashSet<B32>>,
+    pub signature_tree: HashMap<Address, HashSet<H32>>,
     /// from_address -> input_size
     pub ec_pairing_input_size_tree: HashMap<Address, Vec<u32>>,
     pub first_trace: Option<Trace>,
@@ -30,9 +29,8 @@ impl TraceTree {
     const FIRST_DEGREE_FILTER_ADDRESSES: &'static [Address] =
         &[EC_PAIRING_ADDRESS, EC_RECOVER_ADDRESS];
 
-    pub fn new(topic_id: &'static str, chain_id: u64) -> Self {
+    pub fn new(chain_id: u64) -> Self {
         Self {
-            topic_id,
             chain_id,
             call_tree: HashMap::new(),
             gas_tree: HashMap::new(),
@@ -42,25 +40,25 @@ impl TraceTree {
         }
     }
 
-    pub fn construct_signature(b: &Bytes) -> B32 {
+    pub fn construct_signature(b: &Bytes) -> H32 {
         let mut signature = [0u8; 4];
         match b.len() > 4 {
-            false => B32::new(signature),
+            false => H32::from(signature),
             true => {
                 signature.copy_from_slice(&b[..4]);
-                B32::new(signature)
+                H32::from(signature)
             }
         }
     }
 
-    pub fn construct_signature_with_to(b: (&Bytes, Address)) -> B32 {
+    pub fn construct_signature_with_to(b: (&Bytes, Address)) -> H32 {
         let mut signature = [0u8; 4];
         match (b.1, b.0.len() > 4) {
-            (_, false) => B32::new(signature),
-            (f, _) if Self::FIRST_DEGREE_FILTER_ADDRESSES.contains(&f) => B32::new(signature),
+            (_, false) => H32::from(signature),
+            (f, _) if Self::FIRST_DEGREE_FILTER_ADDRESSES.contains(&f) => H32::from(signature),
             (_, true) => {
                 signature.copy_from_slice(&b.0[..4]);
-                B32::new(signature)
+                H32::from(signature)
             }
         }
     }

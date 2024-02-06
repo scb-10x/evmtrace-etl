@@ -4,12 +4,12 @@ use tokio::{
     sync::broadcast::{channel, Sender},
 };
 
-use crate::{consumer::TopicCommiter, types::EtlResult};
+use crate::{consumer::Commiter, types::EtlResult};
 
 pub static CHANNEL: Lazy<Channel> = Lazy::new(Channel::new);
 
 pub struct Channel {
-    pub result_tx: Sender<(Vec<EtlResult>, TopicCommiter)>,
+    pub result_tx: Sender<(Vec<EtlResult>, Commiter)>,
 }
 
 impl Channel {
@@ -18,11 +18,15 @@ impl Channel {
         Self { result_tx }
     }
 
-    pub fn send_result(&self, result: Vec<EtlResult>, topic_commiter: TopicCommiter) {
+    pub fn send_result(
+        &self,
+        result: Vec<EtlResult>,
+        topic_commiter: impl Into<Commiter> + Send + 'static,
+    ) {
         let result_tx = self.result_tx.clone();
         spawn(async move {
             result_tx
-                .send((result, topic_commiter))
+                .send((result, topic_commiter.into()))
                 .expect("Failed to send result");
         });
     }

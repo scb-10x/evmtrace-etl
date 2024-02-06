@@ -1,18 +1,12 @@
-use std::{collections::HashMap, marker::PhantomData, pin::Pin, sync::Arc};
+use std::pin::Pin;
 
 use anyhow::Result;
 use futures_util::{stream::BoxStream, Future, StreamExt};
 use log::info;
 use once_cell::sync::Lazy;
-use rdkafka::{
-    config::FromClientConfig,
-    consumer::{Consumer, DefaultConsumerContext, StreamConsumer},
-    util::DefaultRuntime,
-};
 
 use crate::{
     channels::CHANNEL,
-    config::CONFIG,
     types::{Block, BlockWithChainId},
 };
 
@@ -25,24 +19,7 @@ impl KafkaConsumer for BlockConsumer {
     type Data = Block;
 
     fn new() -> Self {
-        let config = CONFIG.kafka_config();
-        let consumers = CONFIG
-            .chains
-            .iter()
-            .map(|c| {
-                let consumer =
-                    StreamConsumer::<DefaultConsumerContext, DefaultRuntime>::from_config(&config)
-                        .expect("Failed to create consumer");
-                consumer
-                    .subscribe(&[&c.kafka_block_topic])
-                    .expect("Failed to subscribe to topic");
-                (c.kafka_block_topic.as_str(), (c.id, Arc::new(consumer)))
-            })
-            .collect::<HashMap<_, _>>();
-        Self {
-            consumers,
-            _data: PhantomData,
-        }
+        todo!()
     }
 
     fn handle_data_stream<'a>(

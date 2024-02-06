@@ -1,4 +1,4 @@
-use alloy_primitives::{aliases::B32, Address, Bytes, B256};
+use ethers::types::{Address, Bytes, H256, H32, U256};
 use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
 use std::{
@@ -22,7 +22,7 @@ strike! {
         Contract(struct {
             pub chain_id: u64,
             pub address: Address,
-            pub function_signatures: HashSet<B32>,
+            pub function_signatures: HashSet<H32>,
             pub degree: u8,
             pub ec_recover_count: u16,
             pub ec_add_count: u16,
@@ -39,13 +39,13 @@ strike! {
             pub from_address: Address,
             pub to_address: Address,
             pub closest_address: HashSet<Address>,
-            pub function_signature: B32,
-            pub transaction_hash: B256,
+            pub function_signature: H32,
+            pub transaction_hash: H256,
             pub transaction_index: u32,
             pub block_number: u64,
             pub block_timestamp: Option<u64>,
-            pub block_hash: Option<B256>,
-            pub value: u128,
+            pub block_hash: Option<H256>,
+            pub value: U256,
             pub input: Bytes,
             pub gas_used: struct {
                 pub requested: u64,
@@ -167,7 +167,7 @@ impl Insertable for Transaction {
                 .unwrap_or("NULL".to_string()), // Handle Option<u64> appropriately
             self.block_hash
                 .map(|e| format!("'{}'", e))
-                .unwrap_or("NULL".to_string()), // Handle Option<B256> appropriately
+                .unwrap_or("NULL".to_string()), // Handle Option<H256> appropriately
             self.value,
             self.input,
             self.gas_used.requested,

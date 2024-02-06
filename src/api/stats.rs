@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use tokio::{spawn, sync::RwLock, task::JoinHandle};
 
-use crate::{channels::CHANNEL, types::EtlResult};
+use crate::{channels::CHANNEL, consumer::Commiter, types::EtlResult};
 
 pub static STATS: Lazy<Stats> = Lazy::new(Stats::new);
 
@@ -61,10 +61,15 @@ impl Stats {
                     };
                 }
 
-                stats
-                    .write()
-                    .await
-                    .insert((tc.topic_id, None), tc.offset as u64);
+                match tc {
+                    Commiter::Kafka(tc) => {
+                        stats
+                            .write()
+                            .await
+                            .insert((tc.topic_id, None), tc.offset as u64);
+                    }
+                    _ => {}
+                }
             }
 
             Ok(())

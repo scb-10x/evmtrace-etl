@@ -16,7 +16,7 @@ use zkscan_etl::{
     api::{self, STATS},
     channels::CHANNEL,
     config::CONFIG,
-    consumer::{TopicCommiter, BLOCK_CONSUMER, TRACE_CONSUMER},
+    consumer::{Commiter, TopicCommiter, WebSocketConsumer},
     dumper::POSTGRESQL_DUMPER,
 };
 
@@ -34,71 +34,80 @@ async fn main() -> Result<(), Error> {
     let filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::DEBUG.into())
         .from_env()?
-        .add_directive("tokio_postgres=info".parse()?);
+        .add_directive("tokio_postgres=info".parse()?)
+        .add_directive("rustls=info".parse()?)
+        .add_directive("ethers_providers=info".parse()?)
+        .add_directive("h2=info".parse()?)
+        .add_directive("hyper=info".parse()?)
+        .add_directive("reqwest=info".parse()?)
+        .add_directive("tungstenite=info".parse()?);
+
     info!("Setting up tracing with filter: {}", filter);
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .compact()
         .init();
 
-    let handle_log = spawn(async move {
-        let mut cnt = HashMap::<u64, u64>::new();
-        let mut rx = CHANNEL.result_tx.subscribe();
+    //let handle_log = spawn(async move {
+    //let mut cnt = HashMap::<u64, u64>::new();
+    //let mut rx = CHANNEL.result_tx.subscribe();
 
-        while let Ok((traces, _)) = rx.recv().await {
-            for t in traces {
-                let v = cnt.entry(t.chain_id()).and_modify(|e| *e += 1).or_insert(1);
-                if *v % 1000 == 0 {
-                    info!("Received {} result traces from chain {}", v, t.chain_id());
-                }
-            }
-        }
-        Result::<()>::Ok(())
-    });
-    let handle_dump = spawn(async move {
-        let mut rx = CHANNEL.result_tx.subscribe();
+    //while let Ok((traces, _)) = rx.recv().await {
+    //for t in traces {
+    //let v = cnt.entry(t.chain_id()).and_modify(|e| *e += 1).or_insert(1);
+    //if *v % 1000 == 0 {
+    //info!("Received {} result traces from chain {}", v, t.chain_id());
+    //}
+    //}
+    //}
+    //Result::<()>::Ok(())
+    //});
+    //let handle_dump = spawn(async move {
+    //let mut rx = CHANNEL.result_tx.subscribe();
 
-        let mut buffer = vec![];
-        let mut latest_partition: Option<TopicCommiter> = None;
-        let mut last_commit = Instant::now();
-        while let Ok((t, partition)) = rx.recv().await {
-            buffer.extend(t);
+    //let mut buffer = vec![];
+    //let mut latest_partition: Option<TopicCommiter> = None;
+    //let mut last_commit = Instant::now();
+    //while let Ok((t, commiter)) = rx.recv().await {
+    //buffer.extend(t);
 
-            match (!rx.is_empty(), buffer.len() > 100_000) {
-                (true, false) => continue,
-                _ => {
-                    let buffer_len = buffer.len();
-                    POSTGRESQL_DUMPER.insert_results(&buffer).await?;
-                    buffer.clear();
+    //match (!rx.is_empty(), buffer.len() > 100_000) {
+    //(true, false) => continue,
+    //_ => {
+    //let buffer_len = buffer.len();
+    //POSTGRESQL_DUMPER.insert_results(&buffer).await?;
+    //buffer.clear();
 
-                    let current_rx_len = rx.len();
-                    debug!(
-                        "Dumped {} result traces to db, {} to go",
-                        buffer_len, current_rx_len
-                    );
-                    if current_rx_len > 100 {
-                        warn!("Too many traces in queue: {}", current_rx_len);
-                    }
-                }
-            }
+    //let current_rx_len = rx.len();
+    //debug!(
+    //"Dumped {} result traces to db, {} to go",
+    //buffer_len, current_rx_len
+    //);
+    //if current_rx_len > 100 {
+    //warn!("Too many traces in queue: {}", current_rx_len);
+    //}
+    //}
+    //}
 
-            let now = Instant::now();
-            match latest_partition {
-                Some(l)
-                    if l.topic_id != partition.topic_id
-                        && partition.offset > l.offset + 100
-                        && last_commit.duration_since(now) > Duration::from_secs(1) =>
-                {
-                    l.commit()?;
-                    last_commit = now;
-                }
-                _ => {}
-            }
-            latest_partition = Some(partition);
-        }
+    //if let Commiter::Kafka(partition) = commiter {
+    //let now = Instant::now();
+    //match latest_partition {
+    //Some(l)
+    //if l.topic_id != partition.topic_id
+    //&& partition.offset > l.offset + 100
+    //&& last_commit.duration_since(now) > Duration::from_secs(1) =>
+    //{
+    //l.commit()?;
+    //last_commit = now;
+    //}
+    //_ => {}
+    //}
+    //latest_partition = Some(partition);
+    //}
+    //}
 
-        Result::<()>::Ok(())
-    });
+    //Result::<()>::Ok(())
+    //});
 
     let server = spawn(async move {
         let app = Router::new()
@@ -112,11 +121,10 @@ async fn main() -> Result<(), Error> {
     });
 
     match select! {
-        e = TRACE_CONSUMER.poll() => e,
-        e = BLOCK_CONSUMER.poll() => e,
+        e = WebSocketConsumer::poll() => e,
         e = STATS.watch() => e,
-        e = handle_log => e,
-        e = handle_dump => e,
+        //e = handle_log => e,
+        //e = handle_dump => e,
         e = server => e,
     } {
         Ok(Err(e)) => error!("Error: {}", e),
