@@ -80,8 +80,16 @@ impl Trace {
                 value: Some(value),
                 input: Some(input),
                 output: Some(output),
-                trace_type: Some(to_string(&action_type).expect("Failed to serialize action type")),
-                call_type: Some(to_string(&call_type).expect("Failed to serialize call type")),
+                trace_type: Some(
+                    to_string(&action_type)
+                        .expect("Failed to serialize action type")
+                        .replace("\"", ""),
+                ),
+                call_type: Some(
+                    to_string(&call_type)
+                        .expect("Failed to serialize call type")
+                        .replace("\"", ""),
+                ),
                 reward_type: None,
                 gas: Some(gas.as_u64()),
                 gas_used: Some(gas_used.as_u64()),

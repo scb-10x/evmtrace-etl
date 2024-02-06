@@ -1,4 +1,7 @@
-use ethers::types::{Address, Bytes, H256, H32, U256};
+use ethers::{
+    types::{Address, Bytes, H256, H32, U256},
+    utils::to_checksum,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
 use std::{
@@ -149,13 +152,13 @@ impl Insertable for Transaction {
 
     fn value(&self) -> String {
         format!(
-            "({},'{}','{}','{{{}}}','{}','{}',{},{},{},{},{},'{}',{},{},{},{})",
+            "({},'{}','{}','{{{}}}','{:?}','{:?}',{},{},{},{},{},'{:?}',{},{},{},{})",
             self.chain_id,
-            self.from_address,
-            self.to_address,
+            to_checksum(&self.from_address, None),
+            to_checksum(&self.to_address, None),
             self.closest_address
                 .iter()
-                .map(|e| format!("\"{}\"", e))
+                .map(|e| format!("\"{}\"", to_checksum(e, None)))
                 .collect::<Vec<_>>()
                 .join(","),
             self.function_signature,
@@ -166,7 +169,7 @@ impl Insertable for Transaction {
                 .map(|e| format!("'{}'", e))
                 .unwrap_or("NULL".to_string()), // Handle Option<u64> appropriately
             self.block_hash
-                .map(|e| format!("'{}'", e))
+                .map(|e| format!("'{:?}'", e))
                 .unwrap_or("NULL".to_string()), // Handle Option<H256> appropriately
             self.value,
             self.input,
@@ -188,10 +191,10 @@ impl Insertable for Contract {
         format!(
             "({},'{}','{{{}}}',{},{},{},{},{}, '{{{}}}', '{{{}}}')",
             self.chain_id,
-            self.address,
+            to_checksum(&self.address, None),
             self.function_signatures
                 .iter()
-                .map(|e| format!("\"{}\"", e))
+                .map(|e| format!("\"{:?}\"", e))
                 .collect::<Vec<_>>()
                 .join(","),
             self.degree,
@@ -206,7 +209,7 @@ impl Insertable for Contract {
                 .join(","),
             self.call
                 .iter()
-                .map(|e| format!("\"{}\"", e))
+                .map(|e| format!("\"{}\"", to_checksum(e, None)))
                 .collect::<Vec<_>>()
                 .join(",")
         )
@@ -218,7 +221,7 @@ impl Contract {
         format!(
             "c:{}:{}:{}",
             self.chain_id,
-            self.address,
+            to_checksum(&self.address, None),
             self.function_signatures
                 .iter()
                 .map(ToString::to_string)
@@ -247,7 +250,7 @@ impl Insertable for BlockWithChainId {
 
     fn value(&self) -> String {
         format!(
-            "({},{},{},'{}','{}',{},'{}','{}',{},{},{},{},{},{})",
+            "({},{},{},'{:?}','{:?}',{},'{:?}','{}',{},{},{},{},{},{})",
             self.chain_id,
             self.block.number,
             self.block.timestamp,
@@ -255,7 +258,7 @@ impl Insertable for BlockWithChainId {
             self.block.parent_hash,
             self.block.transaction_count,
             self.block.nonce,
-            self.block.miner,
+            to_checksum(&self.block.miner, None),
             self.block.difficulty,
             self.block.total_difficulty,
             self.block.size,

@@ -30,9 +30,13 @@ impl WebSocketConsumer {
                 let mut trace_tree = TraceTree::new(chain.id);
 
                 let backoff = ConstantBuilder::default();
-                let get_trace = || async { rpc.trace_block(BlockNumber::Latest).await };
                 while let Some(b) = stream.next().await {
                     if let Some(mut block) = Block::from_ethers(b) {
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        let get_trace = || async {
+                            rpc.trace_block(BlockNumber::Number(block.number.into()))
+                                .await
+                        };
                         let traces = get_trace
                             .retry(&backoff)
                             .notify(|err, _| warn!("Error getting trace: {}, retrying", err))
@@ -42,7 +46,7 @@ impl WebSocketConsumer {
                             .collect::<Vec<_>>();
                         if let Some(trace) = traces.last() {
                             debug!("Got trace for block {}", trace.block_number);
-                            debug!("Trace: {}", trace);
+                            //debug!("Trace: {}", trace);
                         };
 
                         let mut tx_count = 0;
@@ -63,7 +67,7 @@ impl WebSocketConsumer {
                         }
                         block.transaction_count = tx_count;
 
-                        debug!("New block: {}", &block);
+                        //debug!("New block: {}", &block);
                         CHANNEL.send_result(
                             vec![BlockWithChainId {
                                 chain_id: chain.id,
