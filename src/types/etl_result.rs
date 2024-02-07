@@ -159,7 +159,7 @@ impl Insertable for Transaction {
 
     fn value(&self) -> String {
         format!(
-            "({},'{}','{}','{{{}}}','{:?}','{:?}',{},{},{},{},{},'{:?}',{},{},{},{},{},{},{},'{{{}}}','{{{}}}')",
+            "({},'{}','{}','{{{}}}','{:?}','{:?}',{},{},{},{},{},'{}',{},{},{},{},{},{},{},'{{{}}}','{{{}}}')",
             self.chain_id,
             to_checksum(&self.from_address, None),
             to_checksum(&self.to_address, None),
