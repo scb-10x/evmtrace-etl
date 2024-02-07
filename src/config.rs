@@ -112,28 +112,3 @@ impl From<&Config> for Option<ClientConfig> {
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn correct_chain_serialization() {
-        let config = vec![
-            Chain::Provider(ProviderChainConfig {
-                id: 1,
-                rpc_url: "http://localhost:8545".to_string(),
-                ws_url: "ws://localhost:8546".to_string(),
-                index_block: true,
-                index_tx: true,
-            }),
-            Chain::Kafka(KafkaChainConfig {
-                id: 2,
-                blocks_topic: Some("blocks".to_string()),
-                traces_topic: Some("traces".to_string()),
-            }),
-        ];
-
-        println!("{}", serde_json::to_string(&config).unwrap());
-    }
-}

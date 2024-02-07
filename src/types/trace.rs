@@ -3,14 +3,18 @@ use std::fmt::{Display, Formatter};
 use ethers::types::{
     Action, Address, Bytes, Call, CallResult, Res, Trace as EtherTrace, H256, U256,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::{to_string, to_string_pretty};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::{to_string, to_string_pretty, Number};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trace {
     pub transaction_index: Option<u32>,
     pub from_address: Option<Address>,
     pub to_address: Option<Address>,
+    #[serde(
+        deserialize_with = "value_from_string",
+        serialize_with = "value_as_string"
+    )]
     pub value: Option<U256>,
     pub input: Option<Bytes>,
     pub output: Option<Bytes>,
@@ -33,6 +37,27 @@ pub struct Trace {
     //pub trace_index: u64,
     //pub item_id: String,
     //pub item_timestamp: Option<String>,
+}
+
+fn value_as_string<S>(v: &Option<U256>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    v.as_ref()
+        .map(|v| v.to_string())
+        .as_ref()
+        .serialize(serializer)
+}
+
+pub fn value_from_string<'de, D>(deserializer: D) -> Result<Option<U256>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+    Option::<Number>::deserialize(deserializer).and_then(|o| {
+        o.map(|n| U256::from_dec_str(&n.to_string()).map_err(|err| Error::custom(err.to_string())))
+            .transpose()
+    })
 }
 
 impl Display for Trace {

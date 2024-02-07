@@ -51,11 +51,17 @@ strike! {
             pub value: U256,
             pub input: Bytes,
             pub gas_used: struct {
-                pub requested: u64,
                 pub total: u64,
                 pub first_degree: u64,
                 pub second_degree: u64,
             },
+            pub ec_recover_count: u16,
+            pub ec_add_count: u16,
+            pub ec_mul_count: u16,
+            pub ec_pairing_count: u16,
+            /// The size of the input to the pairing operation in bytes
+            pub ec_pairing_input_sizes: Vec<u32>,
+            pub ec_recover_addresses: HashSet<Address>,
         }),
     }
 }
@@ -147,12 +153,13 @@ impl Insertable for Transaction {
         chain_id, from_address, to_address, closest_address,
         function_signature, transaction_hash, transaction_index,
         block_number, block_timestamp, block_hash, value, input,
-        gas_used_requested, gas_used_total, gas_used_first_degree, gas_used_second_degree
+        gas_used_total, gas_used_first_degree, gas_used_second_degree,
+        ec_recover_count, ec_add_count, ec_mul_count, ec_pairing_count, ec_pairing_input_sizes, ec_recover_addresses
     ) VALUES {values} ON CONFLICT (chain_id, transaction_hash) DO NOTHING";
 
     fn value(&self) -> String {
         format!(
-            "({},'{}','{}','{{{}}}','{:?}','{:?}',{},{},{},{},{},'{:?}',{},{},{},{})",
+            "({},'{}','{}','{{{}}}','{:?}','{:?}',{},{},{},{},{},'{:?}',{},{},{},{},{},{},{},'{{{}}}','{{{}}}')",
             self.chain_id,
             to_checksum(&self.from_address, None),
             to_checksum(&self.to_address, None),
@@ -173,10 +180,23 @@ impl Insertable for Transaction {
                 .unwrap_or("NULL".to_string()), // Handle Option<H256> appropriately
             self.value,
             self.input,
-            self.gas_used.requested,
             self.gas_used.total,
             self.gas_used.first_degree,
-            self.gas_used.second_degree
+            self.gas_used.second_degree,
+            self.ec_recover_count,
+            self.ec_add_count,
+            self.ec_mul_count,
+            self.ec_pairing_count,
+            self.ec_pairing_input_sizes
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(","),
+            self.ec_recover_addresses
+                .iter()
+                .map(|e| format!("\"{}\"", to_checksum(e, None)))
+                .collect::<Vec<_>>()
+                .join(","),
         )
     }
 }

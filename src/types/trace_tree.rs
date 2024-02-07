@@ -3,14 +3,13 @@ use std::{
     iter,
 };
 
-use ethers::types::{Address, Bytes, H32};
-
 use crate::{
     constants::addresses::{
         EC_ADD_ADDRESS, EC_MUL_ADDRESS, EC_PAIRING_ADDRESS, EC_RECOVER_ADDRESS,
     },
     types::{Contract, EtlResult, GasUsed, Trace, Transaction},
 };
+use ethers::types::{Address, Bytes, H32};
 
 pub struct TraceTree {
     pub chain_id: u64,
@@ -22,6 +21,7 @@ pub struct TraceTree {
     pub signature_tree: HashMap<Address, HashSet<H32>>,
     /// from_address -> input_size
     pub ec_pairing_input_size_tree: HashMap<Address, Vec<u32>>,
+    pub ec_recover_addresses: HashSet<Address>,
     pub first_trace: Option<Trace>,
 }
 
@@ -36,6 +36,7 @@ impl TraceTree {
             gas_tree: HashMap::new(),
             signature_tree: HashMap::new(),
             ec_pairing_input_size_tree: HashMap::new(),
+            ec_recover_addresses: HashSet::new(),
             first_trace: None,
         }
     }
@@ -81,7 +82,6 @@ impl TraceTree {
                 input,
                 value,
                 gas,
-                gas_used,
                 ..
             }),
             true,
@@ -198,11 +198,45 @@ impl TraceTree {
                 value: value.unwrap_or_default(),
                 input: input.as_ref().cloned().unwrap_or_default(),
                 gas_used: GasUsed {
-                    requested: gas.unwrap_or_default(),
-                    total: gas_used.unwrap_or_default(),
+                    total: gas.unwrap_or_default(),
                     first_degree: first_degree_gas_used,
                     second_degree: second_degree_gas_used,
                 },
+                ec_recover_count: self
+                    .call_tree
+                    .get(&EC_ADD_ADDRESS)
+                    .iter()
+                    .map(|v| v.values())
+                    .flatten()
+                    .sum(),
+                ec_add_count: self
+                    .call_tree
+                    .get(&EC_ADD_ADDRESS)
+                    .iter()
+                    .map(|v| v.values())
+                    .flatten()
+                    .sum(),
+                ec_mul_count: self
+                    .call_tree
+                    .get(&EC_MUL_ADDRESS)
+                    .iter()
+                    .map(|v| v.values())
+                    .flatten()
+                    .sum(),
+                ec_pairing_count: self
+                    .call_tree
+                    .get(&EC_PAIRING_ADDRESS)
+                    .iter()
+                    .map(|v| v.values())
+                    .flatten()
+                    .sum(),
+                ec_pairing_input_sizes: self
+                    .ec_pairing_input_size_tree
+                    .values()
+                    .flatten()
+                    .copied()
+                    .collect(),
+                ec_recover_addresses: self.ec_recover_addresses.clone(),
             }
             .into();
 
@@ -250,6 +284,13 @@ impl TraceTree {
                             .map(|i| i.len() as u32)
                             .unwrap_or_default(),
                     );
+            }
+
+            if to_address == EC_RECOVER_ADDRESS {
+                if let Some(b) = trace.output.as_ref() {
+                    self.ec_recover_addresses
+                        .insert(Address::from_slice(&b[12..]));
+                }
             }
         }
     }

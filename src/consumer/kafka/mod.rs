@@ -44,8 +44,9 @@ where
                         .payload_view::<str>()
                         .and_then(|p| p.ok())
                         .ok_or_else(|| anyhow!("Invalid payload"))?;
-                    let data = from_str::<T>(payload)
-                        .map_err(|e| anyhow!("Serialization Error: {e}, original {payload}"))?;
+                    let data = from_str::<T>(payload).map_err(|e| {
+                        anyhow!("Serialization Error: {e}, original {payload}, chain id {chain_id}")
+                    })?;
 
                     Ok((
                         data,
