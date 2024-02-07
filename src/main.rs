@@ -53,7 +53,7 @@ async fn main() -> Result<(), Error> {
         while let Ok((traces, _)) = rx.recv().await {
             for t in traces {
                 let v = cnt.entry(t.chain_id()).and_modify(|e| *e += 1).or_insert(1);
-                if *v % 1000 == 0 {
+                if *v % 10000 == 0 {
                     info!("Received {} result traces from chain {}", v, t.chain_id());
                 }
 
