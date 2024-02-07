@@ -6,3 +6,4 @@ pub mod consumer;
 pub mod dumper;
 pub mod providers;
 pub mod types;
+pub mod utils;

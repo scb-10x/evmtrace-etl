@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::{anyhow, Error, Result};
 use axum::{routing::get, serve, Router};
-use log::{debug, error, info};
+use log::{error, info};
 use tokio::{net::TcpListener, select, spawn};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
@@ -15,7 +15,7 @@ use zkscan_etl::{
     api::{self, STATS},
     channels::CHANNEL,
     config::CONFIG,
-    consumer::WebSocketConsumer,
+    consumer::{BlockConsumer, TraceConsumer, WebSocketConsumer},
 };
 
 #[tokio::main]
@@ -67,9 +67,7 @@ async fn main() -> Result<(), Error> {
     #[cfg(feature = "no-dump")]
     let handle_dump = spawn(async move {
         let mut rx = CHANNEL.result_tx.subscribe();
-        while let Ok((t, _)) = rx.recv().await {
-            debug!("Received {} result traces", t.len());
-        }
+        while let Ok(_) = rx.recv().await {}
         Result::<()>::Ok(())
     });
     #[cfg(not(feature = "no-dump"))]
@@ -140,6 +138,8 @@ async fn main() -> Result<(), Error> {
     });
 
     match select! {
+        e = TraceConsumer::poll() => e,
+        e = BlockConsumer::poll() => e,
         e = WebSocketConsumer::poll() => e,
         e = STATS.watch() => e,
         e = handle_log => e,

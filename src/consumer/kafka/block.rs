@@ -3,7 +3,6 @@ use std::{collections::HashMap, marker::PhantomData, pin::Pin, sync::Arc};
 use anyhow::Result;
 use futures_util::{stream::BoxStream, Future, StreamExt};
 use log::info;
-use once_cell::sync::Lazy;
 use rdkafka::{
     config::FromClientConfig,
     consumer::{Consumer, StreamConsumer},
@@ -17,7 +16,6 @@ use crate::{
 
 use super::{KafkaConsumer, KafkaStreamConsumer, TopicCommiter};
 
-pub static BLOCK_CONSUMER: Lazy<BlockConsumer> = Lazy::new(BlockConsumer::new);
 pub type BlockConsumer = KafkaStreamConsumer<Block>;
 
 impl KafkaConsumer for BlockConsumer {

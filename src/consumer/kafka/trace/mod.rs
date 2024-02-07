@@ -3,7 +3,6 @@ use std::{collections::HashMap, marker::PhantomData, pin::Pin, sync::Arc};
 use anyhow::Result;
 use futures_util::{stream::BoxStream, Future, StreamExt};
 use log::info;
-use once_cell::sync::Lazy;
 use rdkafka::{
     config::FromClientConfig,
     consumer::{Consumer, StreamConsumer},
@@ -16,8 +15,6 @@ use crate::{
 };
 
 use super::{KafkaConsumer, KafkaStreamConsumer, TopicCommiter};
-
-pub static TRACE_CONSUMER: Lazy<TraceConsumer> = Lazy::new(TraceConsumer::new);
 
 pub type TraceConsumer = KafkaStreamConsumer<Trace>;
 

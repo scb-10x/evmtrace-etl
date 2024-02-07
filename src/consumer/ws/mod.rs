@@ -1,18 +1,16 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use backon::{ConstantBuilder, Retryable};
 use ethers::{providers::Middleware, types::BlockNumber};
 use futures_util::StreamExt;
 use log::{debug, info, warn};
-use tokio::{
-    spawn,
-    task::{JoinHandle, JoinSet},
-};
+use tokio::task::{JoinHandle, JoinSet};
 
 use crate::{
     channels::CHANNEL,
     config::{Chain, CONFIG},
     providers::PROVIDER_POOL,
     types::{Block, BlockWithChainId, Trace, TraceTree},
+    utils::join_set_else_pending,
 };
 
 #[derive(Debug, Clone)]
@@ -88,15 +86,6 @@ impl WebSocketConsumer {
             }
         }
 
-        spawn(async move {
-            while let Some(r) = set.join_next().await {
-                match r {
-                    Err(e) => bail!(e),
-                    Ok(Err(e)) => bail!(e),
-                    _ => {}
-                };
-            }
-            Ok(())
-        })
+        join_set_else_pending(set)
     }
 }

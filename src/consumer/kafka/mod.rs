@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData, pin::Pin, sync::Arc};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use futures_util::{stream::BoxStream, Future, StreamExt};
 use rdkafka::{
     consumer::{CommitMode, Consumer, DefaultConsumerContext, StreamConsumer},
@@ -9,15 +9,14 @@ use rdkafka::{
 };
 use serde::de::DeserializeOwned;
 use serde_json::from_str;
-use tokio::{
-    spawn,
-    task::{JoinHandle, JoinSet},
-};
+use tokio::task::{JoinHandle, JoinSet};
 
 mod block;
 mod trace;
 pub use block::*;
 pub use trace::*;
+
+use crate::utils::join_set_else_pending;
 
 use super::Commiter;
 
@@ -31,9 +30,10 @@ impl<T: DeserializeOwned + Sync + Unpin> KafkaStreamConsumer<T>
 where
     Self: KafkaConsumer<Data = T>,
 {
-    pub fn poll(&self) -> JoinHandle<Result<()>> {
+    pub fn poll() -> JoinHandle<Result<()>> {
+        let s = Self::new();
         let mut set = JoinSet::<Result<()>>::new();
-        for (topic_id, (chain_id, consumer)) in &self.consumers {
+        for (topic_id, (chain_id, consumer)) in &s.consumers {
             let topic_id = *topic_id;
             let chain_id = *chain_id;
             let consumer = consumer.clone();
@@ -74,16 +74,7 @@ where
             });
         }
 
-        spawn(async move {
-            while let Some(r) = set.join_next().await {
-                match r {
-                    Err(e) => bail!(e),
-                    Ok(Err(e)) => bail!(e),
-                    _ => {}
-                };
-            }
-            Ok(())
-        })
+        join_set_else_pending(set)
     }
 }
 
