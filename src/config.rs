@@ -13,6 +13,15 @@ strike! {
     #[strikethrough[derive(Debug, Clone)]]
     #[derive(Serialize, Deserialize)]
     pub struct Config {
+        pub kafka: Option<
+            #[derive(Serialize_tuple, Deserialize_tuple)]
+            pub struct {
+                pub url: String,
+                pub group_id: String,
+                pub username: String,
+                pub password: String,
+            }
+        >,
         pub postgres:
             #[derive(Serialize, Deserialize)]
             pub struct {
@@ -20,7 +29,8 @@ strike! {
                 pub username: String,
                 pub password: String,
                 pub db: String,
-        },
+            }
+        ,
         pub redis: String,
         pub chains: Vec<
             #[derive(Serialize_tuple, Deserialize_tuple)]
@@ -28,7 +38,8 @@ strike! {
                 pub id: u64,
                 pub rpc_url: String,
                 pub ws_url: String,
-        }>,
+            }
+        >,
         pub port: u16,
     }
 }
@@ -46,6 +57,7 @@ impl Chains {
 impl Config {
     pub fn new() -> Self {
         Config {
+            kafka: None,
             postgres: Postgres {
                 host: var("POSTGRES_HOST").expect("POSTGRES_HOST must be set"),
                 username: var("POSTGRES_USERNAME").expect("POSTGRES_USERNAME must be set"),
@@ -85,5 +97,51 @@ impl From<&Config> for PostgresConfig {
             }),
             ..Default::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::{Deserialize, Serialize};
+    use serde_tuple::{Deserialize_tuple, Serialize_tuple};
+
+    #[test]
+    fn correct_chain_serialization() {
+        #[derive(Serialize_tuple, Deserialize_tuple)]
+        pub struct Provider {
+            pub id: u64,
+            pub rpc_url: String,
+            pub ws_url: String,
+            pub index_block: bool,
+            pub index_tx: bool,
+        }
+        #[derive(Serialize_tuple, Deserialize_tuple)]
+        pub struct Kafka {
+            pub id: u64,
+            pub blocks_topic: Option<String>,
+            pub traces_topic: Option<String>,
+        }
+        #[derive(Serialize, Deserialize)]
+        pub enum Chain {
+            Provider(Provider),
+            Kafka(Kafka),
+        }
+
+        let config = vec![
+            Chain::Provider(Provider {
+                id: 1,
+                rpc_url: "http://localhost:8545".to_string(),
+                ws_url: "ws://localhost:8546".to_string(),
+                index_block: true,
+                index_tx: true,
+            }),
+            Chain::Kafka(Kafka {
+                id: 2,
+                blocks_topic: Some("blocks".to_string()),
+                traces_topic: Some("traces".to_string()),
+            }),
+        ];
+
+        println!("{}", serde_json::to_string(&config).unwrap());
     }
 }
