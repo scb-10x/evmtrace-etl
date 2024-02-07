@@ -7,6 +7,9 @@ use serde_json::from_str;
 use serde_tuple::{Deserialize_tuple, Serialize_tuple};
 use structstruck::strike;
 
+mod chain;
+pub use chain::*;
+
 pub static CONFIG: Lazy<Config> = Lazy::new(Config::new);
 
 strike! {
@@ -32,32 +35,17 @@ strike! {
             }
         ,
         pub redis: String,
-        pub chains: Vec<
-            #[derive(Serialize_tuple, Deserialize_tuple)]
-            pub struct {
-                pub id: u64,
-                pub rpc_url: String,
-                pub ws_url: String,
-            }
-        >,
+        pub chains: Vec<Chain>,
         pub port: u16,
-    }
-}
-
-impl Chains {
-    pub fn new<T: ToString>(id: u64, rpc_url: T, ws_url: T) -> Self {
-        Chains {
-            id,
-            rpc_url: rpc_url.to_string(),
-            ws_url: ws_url.to_string(),
-        }
     }
 }
 
 impl Config {
     pub fn new() -> Self {
         Config {
-            kafka: None,
+            kafka: var("KAFKA")
+                .ok()
+                .map(|kafka| from_str(&kafka).expect("KAFKA must be a valid JSON array")),
             postgres: Postgres {
                 host: var("POSTGRES_HOST").expect("POSTGRES_HOST must be set"),
                 username: var("POSTGRES_USERNAME").expect("POSTGRES_USERNAME must be set"),
@@ -65,8 +53,10 @@ impl Config {
                 db: var("POSTGRES_DB").expect("POSTGRES_DB must be set"),
             },
             redis: var("REDIS_URL").expect("REDIS_URL must be set"),
-            chains: from_str(&var("CHAINS").expect("CHAINS must be set"))
-                .expect("CHAINS must be a valid JSON array"),
+            chains: var("CHAINS")
+                .ok()
+                .map(|chains| from_str(&chains).expect("CHAINS must be a valid JSON array"))
+                .unwrap_or_default(),
             port: var("PORT")
                 .unwrap_or("8080".to_string())
                 .parse()
@@ -102,40 +92,19 @@ impl From<&Config> for PostgresConfig {
 
 #[cfg(test)]
 mod tests {
-    use serde::{Deserialize, Serialize};
-    use serde_tuple::{Deserialize_tuple, Serialize_tuple};
+    use super::*;
 
     #[test]
     fn correct_chain_serialization() {
-        #[derive(Serialize_tuple, Deserialize_tuple)]
-        pub struct Provider {
-            pub id: u64,
-            pub rpc_url: String,
-            pub ws_url: String,
-            pub index_block: bool,
-            pub index_tx: bool,
-        }
-        #[derive(Serialize_tuple, Deserialize_tuple)]
-        pub struct Kafka {
-            pub id: u64,
-            pub blocks_topic: Option<String>,
-            pub traces_topic: Option<String>,
-        }
-        #[derive(Serialize, Deserialize)]
-        pub enum Chain {
-            Provider(Provider),
-            Kafka(Kafka),
-        }
-
         let config = vec![
-            Chain::Provider(Provider {
+            Chain::Provider(ProviderChainConfig {
                 id: 1,
                 rpc_url: "http://localhost:8545".to_string(),
                 ws_url: "ws://localhost:8546".to_string(),
                 index_block: true,
                 index_tx: true,
             }),
-            Chain::Kafka(Kafka {
+            Chain::Kafka(KafkaChainConfig {
                 id: 2,
                 blocks_topic: Some("blocks".to_string()),
                 traces_topic: Some("traces".to_string()),

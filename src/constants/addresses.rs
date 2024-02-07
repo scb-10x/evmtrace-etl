@@ -26,3 +26,20 @@ pub const EC_PAIRING_ADDRESS: Address = H160([
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 18 bytes
     0x00, 0x08, // 24 bytes
 ]);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correct_constant_addresses() {
+        assert_eq!(
+            format!("{:?}", EC_RECOVER_ADDRESS),
+            "0x0000000000000000000000000000000000000001"
+        );
+        assert_eq!(
+            format!("{:?}", EC_PAIRING_ADDRESS),
+            "0x0000000000000000000000000000000000000008"
+        );
+    }
+}

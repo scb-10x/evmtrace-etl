@@ -5,7 +5,7 @@ use ethers::providers::{Http, Provider, Ws};
 use once_cell::sync::Lazy;
 use tokio::sync::RwLock;
 
-use crate::config::CONFIG;
+use crate::config::{Chain, CONFIG};
 
 pub static PROVIDER_POOL: Lazy<ProviderPool> = Lazy::new(ProviderPool::new);
 
@@ -27,12 +27,15 @@ impl ProviderPool {
         if let Some(provider) = rpc.get(&chain_id) {
             return Ok(provider.clone());
         }
-        let chain = CONFIG
+        let rpc_url = CONFIG
             .chains
             .iter()
-            .find(|c| c.id == chain_id)
+            .find_map(|c| match c {
+                Chain::Provider(chain) => (chain.id == chain_id).then_some(chain.rpc_url.clone()),
+                _ => None,
+            })
             .ok_or_else(|| anyhow!("No RPC provider for chain {}", chain_id))?;
-        let provider = Arc::new(Provider::<Http>::try_from(&chain.rpc_url)?);
+        let provider = Arc::new(Provider::<Http>::try_from(rpc_url)?);
         rpc.insert(chain_id, provider.clone());
         Ok(provider)
     }
@@ -42,12 +45,15 @@ impl ProviderPool {
         if let Some(provider) = ws.get(&chain_id) {
             return Ok(provider.clone());
         }
-        let chain = CONFIG
+        let ws_url = CONFIG
             .chains
             .iter()
-            .find(|c| c.id == chain_id)
+            .find_map(|c| match c {
+                Chain::Provider(chain) => (chain.id == chain_id).then_some(chain.ws_url.clone()),
+                _ => None,
+            })
             .ok_or_else(|| anyhow!("No WS provider for chain {}", chain_id))?;
-        let provider = Arc::new(Provider::<Ws>::connect(&chain.ws_url).await?);
+        let provider = Arc::new(Provider::<Ws>::connect(ws_url).await?);
         ws.insert(chain_id, provider.clone());
         Ok(provider)
     }
