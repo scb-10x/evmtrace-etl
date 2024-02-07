@@ -25,6 +25,9 @@ impl WebSocketConsumer {
                     if chain.index_block {
                         info!("Starting ws block consumer for {}", chain.id);
                     }
+                    if chain.index_tx {
+                        info!("Starting ws trace consumer for {}", chain.id);
+                    }
                     let ws = PROVIDER_POOL.get_ws(chain.id).await?;
                     let rpc = PROVIDER_POOL.get_rpc(chain.id).await?;
 
