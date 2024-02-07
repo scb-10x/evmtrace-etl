@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::{anyhow, Error, Result};
 use axum::{routing::get, serve, Router};
+use futures_util::future::pending;
 use log::{error, info};
 use tokio::{net::TcpListener, select, spawn};
 use tracing::level_filters::LevelFilter;
@@ -66,8 +67,7 @@ async fn main() -> Result<(), Error> {
 
     #[cfg(feature = "no-dump")]
     let handle_dump = spawn(async move {
-        let mut rx = CHANNEL.result_tx.subscribe();
-        while let Ok(_) = rx.recv().await {}
+        pending::<()>().await;
         Result::<()>::Ok(())
     });
     #[cfg(not(feature = "no-dump"))]

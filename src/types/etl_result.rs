@@ -62,6 +62,7 @@ strike! {
             /// The size of the input to the pairing operation in bytes
             pub ec_pairing_input_sizes: Vec<u32>,
             pub ec_recover_addresses: HashSet<Address>,
+            pub error: Option<String>,
         }),
     }
 }
@@ -154,12 +155,12 @@ impl Insertable for Transaction {
         function_signature, transaction_hash, transaction_index,
         block_number, block_timestamp, block_hash, value, input,
         gas_used_total, gas_used_first_degree, gas_used_second_degree,
-        ec_recover_count, ec_add_count, ec_mul_count, ec_pairing_count, ec_pairing_input_sizes, ec_recover_addresses
+        ec_recover_count, ec_add_count, ec_mul_count, ec_pairing_count, ec_pairing_input_sizes, ec_recover_addresses, error
     ) VALUES {values} ON CONFLICT (chain_id, transaction_hash) DO NOTHING";
 
     fn value(&self) -> String {
         format!(
-            "({},'{}','{}','{{{}}}','{:?}','{:?}',{},{},{},{},{},'{}',{},{},{},{},{},{},{},'{{{}}}','{{{}}}')",
+            "({},'{}','{}','{{{}}}','{:?}','{:?}',{},{},{},{},{},'{}',{},{},{},{},{},{},{},'{{{}}}','{{{}}}',{})",
             self.chain_id,
             to_checksum(&self.from_address, None),
             to_checksum(&self.to_address, None),
@@ -197,6 +198,7 @@ impl Insertable for Transaction {
                 .map(|e| format!("\"{}\"", to_checksum(e, None)))
                 .collect::<Vec<_>>()
                 .join(","),
+            self.error.as_ref().map(|e| format!("'{}'", e)).unwrap_or("NULL".to_string())
         )
     }
 }

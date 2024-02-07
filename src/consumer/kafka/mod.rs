@@ -115,8 +115,8 @@ impl TopicCommiter {
     }
 }
 
-impl Into<Commiter> for TopicCommiter {
-    fn into(self) -> Commiter {
-        Commiter::Kafka(self)
+impl From<TopicCommiter> for Commiter {
+    fn from(val: TopicCommiter) -> Self {
+        Commiter::Kafka(val)
     }
 }

@@ -82,6 +82,7 @@ impl TraceTree {
                 input,
                 value,
                 gas,
+                error,
                 ..
             }),
             true,
@@ -206,29 +207,25 @@ impl TraceTree {
                     .call_tree
                     .get(&EC_ADD_ADDRESS)
                     .iter()
-                    .map(|v| v.values())
-                    .flatten()
+                    .flat_map(|v| v.values())
                     .sum(),
                 ec_add_count: self
                     .call_tree
                     .get(&EC_ADD_ADDRESS)
                     .iter()
-                    .map(|v| v.values())
-                    .flatten()
+                    .flat_map(|v| v.values())
                     .sum(),
                 ec_mul_count: self
                     .call_tree
                     .get(&EC_MUL_ADDRESS)
                     .iter()
-                    .map(|v| v.values())
-                    .flatten()
+                    .flat_map(|v| v.values())
                     .sum(),
                 ec_pairing_count: self
                     .call_tree
                     .get(&EC_PAIRING_ADDRESS)
                     .iter()
-                    .map(|v| v.values())
-                    .flatten()
+                    .flat_map(|v| v.values())
                     .sum(),
                 ec_pairing_input_sizes: self
                     .ec_pairing_input_size_tree
@@ -237,6 +234,7 @@ impl TraceTree {
                     .copied()
                     .collect(),
                 ec_recover_addresses: self.ec_recover_addresses.clone(),
+                error: error.clone(),
             }
             .into();
 
@@ -300,6 +298,7 @@ impl TraceTree {
         self.gas_tree.clear();
         self.signature_tree.clear();
         self.ec_pairing_input_size_tree.clear();
+        self.ec_recover_addresses.clear();
         self.first_trace = Some(first_trace.as_ref().clone());
     }
 }

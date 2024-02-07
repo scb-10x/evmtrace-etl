@@ -108,12 +108,12 @@ impl Trace {
                 trace_type: Some(
                     to_string(&action_type)
                         .expect("Failed to serialize action type")
-                        .replace("\"", ""),
+                        .replace('\"', ""),
                 ),
                 call_type: Some(
                     to_string(&call_type)
                         .expect("Failed to serialize call type")
-                        .replace("\"", ""),
+                        .replace('\"', ""),
                 ),
                 reward_type: None,
                 gas: Some(gas.as_u64()),
