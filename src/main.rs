@@ -3,21 +3,19 @@ use std::{
     net::Ipv4Addr,
     panic::{set_hook, take_hook},
     process::exit,
-    time::Duration,
 };
 
 use anyhow::{anyhow, Error, Result};
 use axum::{routing::get, serve, Router};
-use log::{debug, error, info, warn};
-use tokio::{net::TcpListener, select, spawn, time::Instant};
+use log::{debug, error, info};
+use tokio::{net::TcpListener, select, spawn};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use zkscan_etl::{
     api::{self, STATS},
     channels::CHANNEL,
     config::CONFIG,
-    consumer::{Commiter, TopicCommiter, WebSocketConsumer},
-    dumper::POSTGRESQL_DUMPER,
+    consumer::WebSocketConsumer,
 };
 
 #[tokio::main]
@@ -48,66 +46,87 @@ async fn main() -> Result<(), Error> {
         .compact()
         .init();
 
-    //let handle_log = spawn(async move {
-    //let mut cnt = HashMap::<u64, u64>::new();
-    //let mut rx = CHANNEL.result_tx.subscribe();
+    let handle_log = spawn(async move {
+        let mut cnt = HashMap::<u64, u64>::new();
+        let mut rx = CHANNEL.result_tx.subscribe();
 
-    //while let Ok((traces, _)) = rx.recv().await {
-    //for t in traces {
-    //let v = cnt.entry(t.chain_id()).and_modify(|e| *e += 1).or_insert(1);
-    //if *v % 1000 == 0 {
-    //info!("Received {} result traces from chain {}", v, t.chain_id());
-    //}
-    //}
-    //}
-    //Result::<()>::Ok(())
-    //});
-    //let handle_dump = spawn(async move {
-    //let mut rx = CHANNEL.result_tx.subscribe();
+        while let Ok((traces, _)) = rx.recv().await {
+            for t in traces {
+                let v = cnt.entry(t.chain_id()).and_modify(|e| *e += 1).or_insert(1);
+                if *v % 1000 == 0 {
+                    info!("Received {} result traces from chain {}", v, t.chain_id());
+                }
 
-    //let mut buffer = vec![];
-    //let mut latest_partition: Option<TopicCommiter> = None;
-    //let mut last_commit = Instant::now();
-    //while let Ok((t, commiter)) = rx.recv().await {
-    //buffer.extend(t);
+                #[cfg(feature = "trace-result")]
+                info!("Received result from chain {}: {}", t.chain_id(), t);
+            }
+        }
+        Result::<()>::Ok(())
+    });
 
-    //match (!rx.is_empty(), buffer.len() > 100_000) {
-    //(true, false) => continue,
-    //_ => {
-    //let buffer_len = buffer.len();
-    //POSTGRESQL_DUMPER.insert_results(&buffer).await?;
-    //buffer.clear();
+    #[cfg(feature = "no-dump")]
+    let handle_dump = spawn(async move {
+        let mut rx = CHANNEL.result_tx.subscribe();
+        while let Ok((t, _)) = rx.recv().await {
+            debug!("Received {} result traces", t.len());
+        }
+        Result::<()>::Ok(())
+    });
+    #[cfg(not(feature = "no-dump"))]
+    let handle_dump = spawn(async move {
+        use log::warn;
+        use std::time::Duration;
+        use tokio::time::Instant;
+        use zkscan_etl::{
+            consumer::{Commiter, TopicCommiter},
+            dumper::POSTGRESQL_DUMPER,
+        };
 
-    //let current_rx_len = rx.len();
-    //debug!(
-    //"Dumped {} result traces to db, {} to go",
-    //buffer_len, current_rx_len
-    //);
-    //if current_rx_len > 100 {
-    //warn!("Too many traces in queue: {}", current_rx_len);
-    //}
-    //}
-    //}
+        let mut rx = CHANNEL.result_tx.subscribe();
 
-    //if let Commiter::Kafka(partition) = commiter {
-    //let now = Instant::now();
-    //match latest_partition {
-    //Some(l)
-    //if l.topic_id != partition.topic_id
-    //&& partition.offset > l.offset + 100
-    //&& last_commit.duration_since(now) > Duration::from_secs(1) =>
-    //{
-    //l.commit()?;
-    //last_commit = now;
-    //}
-    //_ => {}
-    //}
-    //latest_partition = Some(partition);
-    //}
-    //}
+        let mut buffer = vec![];
+        let mut latest_partition: Option<TopicCommiter> = None;
+        let mut last_commit = Instant::now();
+        while let Ok((t, commiter)) = rx.recv().await {
+            buffer.extend(t);
 
-    //Result::<()>::Ok(())
-    //});
+            match (!rx.is_empty(), buffer.len() > 100_000) {
+                (true, false) => continue,
+                _ => {
+                    let buffer_len = buffer.len();
+                    POSTGRESQL_DUMPER.insert_results(&buffer).await?;
+                    buffer.clear();
+
+                    let current_rx_len = rx.len();
+                    debug!(
+                        "Dumped {} result traces to db, {} to go",
+                        buffer_len, current_rx_len
+                    );
+                    if current_rx_len > 100 {
+                        warn!("Too many traces in queue: {}", current_rx_len);
+                    }
+                }
+            }
+
+            if let Commiter::Kafka(partition) = commiter {
+                let now = Instant::now();
+                match latest_partition {
+                    Some(l)
+                        if l.topic_id != partition.topic_id
+                            && partition.offset > l.offset + 100
+                            && last_commit.duration_since(now) > Duration::from_secs(1) =>
+                    {
+                        l.commit()?;
+                        last_commit = now;
+                    }
+                    _ => {}
+                }
+                latest_partition = Some(partition);
+            }
+        }
+
+        Result::<()>::Ok(())
+    });
 
     let server = spawn(async move {
         let app = Router::new()
@@ -123,8 +142,8 @@ async fn main() -> Result<(), Error> {
     match select! {
         e = WebSocketConsumer::poll() => e,
         e = STATS.watch() => e,
-        //e = handle_log => e,
-        //e = handle_dump => e,
+        e = handle_log => e,
+        e = handle_dump => e,
         e = server => e,
     } {
         Ok(Err(e)) => error!("Error: {}", e),

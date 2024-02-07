@@ -1,12 +1,17 @@
-use std::pin::Pin;
+use std::{collections::HashMap, marker::PhantomData, pin::Pin, sync::Arc};
 
 use anyhow::Result;
 use futures_util::{stream::BoxStream, Future, StreamExt};
 use log::info;
 use once_cell::sync::Lazy;
+use rdkafka::{
+    config::FromClientConfig,
+    consumer::{Consumer, StreamConsumer},
+};
 
 use crate::{
     channels::CHANNEL,
+    config::{Chain, KafkaChainConfig, CONFIG},
     types::{Trace, TraceTree},
 };
 
@@ -20,7 +25,32 @@ impl KafkaConsumer for TraceConsumer {
     type Data = Trace;
 
     fn new() -> Self {
-        todo!()
+        let consumers = match CONFIG.kafka_config() {
+            Some(config) => CONFIG
+                .chains
+                .iter()
+                .filter_map(|c| match c {
+                    Chain::Kafka(KafkaChainConfig {
+                        id,
+                        traces_topic: Some(traces_topic),
+                        ..
+                    }) => {
+                        let consumer = StreamConsumer::from_config(&config)
+                            .expect("Failed to create consumer");
+                        consumer
+                            .subscribe(&[&traces_topic])
+                            .expect("Failed to subscribe to topic");
+                        Some((traces_topic.as_str(), (*id, Arc::new(consumer))))
+                    }
+                    _ => None,
+                })
+                .collect::<HashMap<_, _>>(),
+            None => HashMap::new(),
+        };
+        Self {
+            consumers,
+            _data: PhantomData,
+        }
     }
 
     fn handle_data_stream<'a>(

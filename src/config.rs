@@ -2,6 +2,7 @@ use std::env::var;
 
 use deadpool_postgres::{Config as PostgresConfig, ManagerConfig, RecyclingMethod};
 use once_cell::sync::Lazy;
+use rdkafka::ClientConfig;
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
 use serde_tuple::{Deserialize_tuple, Serialize_tuple};
@@ -67,6 +68,10 @@ impl Config {
     pub fn postgres_config(&self) -> PostgresConfig {
         self.into()
     }
+
+    pub fn kafka_config(&self) -> Option<ClientConfig> {
+        self.into()
+    }
 }
 
 impl Default for Config {
@@ -87,6 +92,24 @@ impl From<&Config> for PostgresConfig {
             }),
             ..Default::default()
         }
+    }
+}
+
+impl From<&Config> for Option<ClientConfig> {
+    fn from(val: &Config) -> Self {
+        val.kafka.as_ref().map(|kafka| {
+            let mut config = ClientConfig::new();
+            config.set("bootstrap.servers", kafka.url.as_str());
+            config.set("security.protocol", "SASL_PLAINTEXT");
+            config.set("sasl.mechanisms", "SCRAM-SHA-256");
+            config.set("group.id", kafka.group_id.as_str());
+            config.set("sasl.username", kafka.username.as_str());
+            config.set("sasl.password", kafka.password.as_str());
+            config.set("auto.offset.reset", "earliest");
+            config.set("socket.timeout.ms", "20000");
+            config.set("session.timeout.ms", "60000");
+            config
+        })
     }
 }
 

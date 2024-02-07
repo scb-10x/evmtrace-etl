@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use backon::{ConstantBuilder, Retryable};
 use ethers::{providers::Middleware, types::BlockNumber};
 use futures_util::StreamExt;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use tokio::{
     spawn,
     task::{JoinHandle, JoinSet},
@@ -24,6 +24,9 @@ impl WebSocketConsumer {
         for cc in &CONFIG.chains {
             if let Chain::Provider(chain) = cc {
                 set.spawn(async move {
+                    if chain.index_block {
+                        info!("Starting ws block consumer for {}", chain.id);
+                    }
                     let ws = PROVIDER_POOL.get_ws(chain.id).await?;
                     let rpc = PROVIDER_POOL.get_rpc(chain.id).await?;
 
@@ -45,38 +48,39 @@ impl WebSocketConsumer {
                                 .into_iter()
                                 .filter_map(Trace::from_ethers)
                                 .collect::<Vec<_>>();
-                            if let Some(trace) = traces.last() {
-                                debug!("Got trace for block {}", trace.block_number);
-                                //debug!("Trace: {}", trace);
-                            };
 
-                            let mut tx_count = 0;
-                            for trace in traces {
-                                if trace.trace_address.is_empty() {
-                                    if let Some(results) = trace_tree.commit() {
-                                        for result in &results {
-                                            debug!("New result: {}", result);
+                            block.transaction_count = traces
+                                .last()
+                                .and_then(|e| e.transaction_index)
+                                .unwrap_or_default();
+
+                            if chain.index_tx {
+                                for trace in traces {
+                                    if trace.trace_address.is_empty() {
+                                        if let Some(results) = trace_tree.commit() {
+                                            for result in &results {
+                                                debug!("New result: {}", result);
+                                            }
+                                            CHANNEL.send_result(results, ());
                                         }
-                                        CHANNEL.send_result(results, ());
+
+                                        trace_tree.reset(&trace);
                                     }
 
-                                    trace_tree.reset(&trace);
-                                    tx_count += 1;
+                                    trace_tree.add_trace(trace);
                                 }
-
-                                trace_tree.add_trace(trace);
                             }
-                            block.transaction_count = tx_count;
 
-                            //debug!("New block: {}", &block);
-                            CHANNEL.send_result(
-                                vec![BlockWithChainId {
-                                    chain_id: chain.id,
-                                    block,
-                                }
-                                .into()],
-                                (),
-                            );
+                            if chain.index_block {
+                                CHANNEL.send_result(
+                                    vec![BlockWithChainId {
+                                        chain_id: chain.id,
+                                        block,
+                                    }
+                                    .into()],
+                                    (),
+                                );
+                            }
                         }
                     }
                     Ok(())

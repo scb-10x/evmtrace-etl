@@ -1,11 +1,9 @@
 use std::{
     collections::{HashMap, HashSet},
     iter,
-    str::FromStr,
 };
 
 use ethers::types::{Address, Bytes, H32};
-use log::info;
 
 use crate::{
     constants::addresses::{
@@ -71,12 +69,6 @@ impl TraceTree {
     }
 
     pub fn commit(&self) -> Option<Vec<EtlResult>> {
-        if self
-            .call_tree
-            .contains_key(&Address::from_str("0xE592427A0AEce92De3Edee1F18E0157C05861564").unwrap())
-        {
-            info!("Found call to uniV3SwapRouter");
-        }
         if let (
             Some(Trace {
                 transaction_hash: Some(tx_hash),
