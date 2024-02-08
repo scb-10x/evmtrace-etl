@@ -205,7 +205,7 @@ impl TraceTree {
                 },
                 ec_recover_count: self
                     .call_tree
-                    .get(&EC_ADD_ADDRESS)
+                    .get(&EC_RECOVER_ADDRESS)
                     .iter()
                     .flat_map(|v| v.values())
                     .sum(),
