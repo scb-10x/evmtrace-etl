@@ -286,8 +286,17 @@ impl TraceTree {
 
             if to_address == EC_RECOVER_ADDRESS {
                 if let Some(b) = trace.output.as_ref() {
-                    self.ec_recover_addresses
-                        .insert(Address::from_slice(&b[12..]));
+                    // If the output is less than 32 bytes, it's invalid address 0x0
+                    match b.len() < 32 {
+                        true => {
+                            self.ec_recover_addresses.insert(Address::zero());
+                        }
+                        false => {
+                            // The last 20 bytes of the output are the address
+                            self.ec_recover_addresses
+                                .insert(Address::from_slice(&b[12..]));
+                        }
+                    }
                 }
             }
         }
