@@ -1,9 +1,14 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use backon::{ConstantBuilder, Retryable};
 use ethers::{providers::Middleware, types::BlockNumber};
 use futures_util::StreamExt;
 use log::{error, info};
-use tokio::task::{JoinHandle, JoinSet};
+use tokio::{
+    task::{JoinHandle, JoinSet},
+    time::sleep,
+};
 
 use crate::{
     channels::CHANNEL,
@@ -61,6 +66,8 @@ impl WebSocketConsumer {
 
                             // if index tx, call debug_trace_block_by_number with non top call
                             if chain.index_tx {
+                                // sleep to avoid block not found
+                                sleep(Duration::from_millis(500)).await;
                                 let traces = get_traces
                                     .retry(&backoff)
                                     .notify(|err, _| error!("Error getting traces: {:?}", err))
