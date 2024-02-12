@@ -1,8 +1,8 @@
-use anyhow::{Error, Result};
+use anyhow::Result;
 use backon::{ConstantBuilder, Retryable};
 use ethers::{providers::Middleware, types::BlockNumber};
 use futures_util::StreamExt;
-use log::info;
+use log::{error, info};
 use tokio::task::{JoinHandle, JoinSet};
 
 use crate::{
@@ -39,29 +39,32 @@ impl WebSocketConsumer {
                         if let Some(mut block) = Block::from_ethers(b) {
                             let block_number = BlockNumber::Number(block.number.into());
                             let get_transactions = || async {
-                                Result::<_, Error>::Ok(
-                                    rpc.get_block(block_number)
-                                        .await?
-                                        .map(|block| block.transactions)
-                                        .unwrap_or_default(),
-                                )
+                                rpc.get_block(block_number)
+                                    .await
+                                    .map(|block| block.map(|b| b.transactions).unwrap_or_default())
                             };
                             let get_traces = || async {
-                                Result::<_, Error>::Ok(
-                                    rpc.debug_trace_block_by_number(
-                                        Some(block_number),
-                                        GethTraceCall::option(),
-                                    )
-                                    .await?,
+                                rpc.debug_trace_block_by_number(
+                                    Some(block_number),
+                                    GethTraceCall::option(),
                                 )
+                                .await
                             };
 
-                            let transactions = get_transactions.retry(&backoff).await?;
+                            let transactions = get_transactions
+                                .retry(&backoff)
+                                .notify(|err, _| {
+                                    error!("Error getting transactions from blocks: {:?}", err)
+                                })
+                                .await?;
                             block.transaction_count = transactions.len() as u32;
 
                             // if index tx, call debug_trace_block_by_number with non top call
                             if chain.index_tx {
-                                let traces = get_traces.retry(&backoff).await?;
+                                let traces = get_traces
+                                    .retry(&backoff)
+                                    .notify(|err, _| error!("Error getting traces: {:?}", err))
+                                    .await?;
                                 for trace in transactions
                                     .into_iter()
                                     .enumerate()
