@@ -81,7 +81,7 @@ impl TraceTree {
                 block_hash,
                 input,
                 value,
-                gas,
+                gas_used,
                 error,
                 ..
             }),
@@ -199,7 +199,7 @@ impl TraceTree {
                 value: value.unwrap_or_default(),
                 input: input.as_ref().cloned().unwrap_or_default(),
                 gas_used: GasUsed {
-                    total: gas.unwrap_or_default(),
+                    total: gas_used.unwrap_or_default(),
                     first_degree: first_degree_gas_used,
                     second_degree: second_degree_gas_used,
                 },
