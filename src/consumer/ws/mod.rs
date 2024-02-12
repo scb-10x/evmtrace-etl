@@ -1,15 +1,15 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use backon::{ConstantBuilder, Retryable};
 use ethers::{providers::Middleware, types::BlockNumber};
 use futures_util::StreamExt;
-use log::{debug, info, warn};
+use log::info;
 use tokio::task::{JoinHandle, JoinSet};
 
 use crate::{
     channels::CHANNEL,
     config::{Chain, CONFIG},
     providers::PROVIDER_POOL,
-    types::{Block, BlockWithChainId, Trace, TraceTree},
+    types::{Block, BlockWithChainId, GethTraceCall, Trace, TraceTree},
     utils::join_set_else_pending,
 };
 
@@ -37,31 +37,52 @@ impl WebSocketConsumer {
                     let backoff = ConstantBuilder::default();
                     while let Some(b) = stream.next().await {
                         if let Some(mut block) = Block::from_ethers(b) {
-                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                            let get_trace = || async {
-                                rpc.trace_block(BlockNumber::Number(block.number.into()))
-                                    .await
+                            let block_number = BlockNumber::Number(block.number.into());
+                            let get_transactions = || async {
+                                Result::<_, Error>::Ok(
+                                    rpc.get_block(block_number)
+                                        .await?
+                                        .map(|block| block.transactions)
+                                        .unwrap_or_default(),
+                                )
                             };
-                            let traces = get_trace
-                                .retry(&backoff)
-                                .notify(|err, _| warn!("Error getting trace: {}, retrying", err))
-                                .await?
-                                .into_iter()
-                                .filter_map(Trace::from_ethers)
-                                .collect::<Vec<_>>();
+                            let get_traces = || async {
+                                Result::<_, Error>::Ok(
+                                    rpc.debug_trace_block_by_number(
+                                        Some(block_number),
+                                        GethTraceCall::option(),
+                                    )
+                                    .await?,
+                                )
+                            };
 
-                            block.transaction_count = traces
-                                .last()
-                                .and_then(|e| e.transaction_index)
-                                .unwrap_or_default();
+                            let transactions = get_transactions.retry(&backoff).await?;
+                            block.transaction_count = transactions.len() as u32;
 
+                            // if index tx, call debug_trace_block_by_number with non top call
                             if chain.index_tx {
-                                for trace in traces {
+                                let traces = get_traces.retry(&backoff).await?;
+                                for trace in transactions
+                                    .into_iter()
+                                    .enumerate()
+                                    .zip(traces)
+                                    .filter_map(|((i, h), t)| {
+                                        GethTraceCall::from_geth_trace(t).map(move |trace| {
+                                            trace.0.into_iter().map(move |inner| {
+                                                Trace::from_call_frame(
+                                                    inner,
+                                                    (i + 1) as u32,
+                                                    h,
+                                                    block.number,
+                                                )
+                                            })
+                                        })
+                                    })
+                                    .flatten()
+                                    .filter_map(|t| t)
+                                {
                                     if trace.trace_address.is_empty() {
                                         if let Some(results) = trace_tree.commit() {
-                                            for result in &results {
-                                                debug!("New result: {}", result);
-                                            }
                                             CHANNEL.send_result(results, ());
                                         }
 

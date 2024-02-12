@@ -236,6 +236,10 @@ impl Insertable for Contract {
                 .join(",")
         )
     }
+
+    fn remove_duplicates(v: &mut Vec<String>) {
+        v.dedup_by(|v1, v2| v1.split(',').take(3).eq(v2.split(',').take(3)));
+    }
 }
 
 impl Contract {

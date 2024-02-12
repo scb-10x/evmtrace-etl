@@ -59,7 +59,21 @@ async fn main() -> Result<(), Error> {
                 }
 
                 #[cfg(feature = "trace-result")]
-                info!("Received result from chain {}: {}", t.chain_id(), t);
+                {
+                    use zkscan_etl::types::EtlResult;
+                    match &t {
+                        EtlResult::BlockWithChainId(b) => {
+                            info!(
+                                "Received block {} from chain {}",
+                                b.block.number,
+                                t.chain_id()
+                            );
+                        }
+                        _ => {
+                            info!("Received result from chain {}: {}", t.chain_id(), t);
+                        }
+                    }
+                }
             }
         }
         Result::<()>::Ok(())

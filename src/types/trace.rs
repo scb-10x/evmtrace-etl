@@ -6,6 +6,8 @@ use ethers::types::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{to_string, to_string_pretty, Number};
 
+use super::InnerCallFrame;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trace {
     pub transaction_index: Option<u32>,
@@ -77,6 +79,37 @@ impl AsRef<Trace> for Trace {
 }
 
 impl Trace {
+    pub fn from_call_frame(
+        InnerCallFrame {
+            frame,
+            subtraces,
+            trace_address,
+        }: InnerCallFrame,
+        transaction_index: u32,
+        transaction_hash: H256,
+        block_number: u64,
+    ) -> Option<Self> {
+        Some(Self {
+            transaction_index: Some(transaction_index),
+            from_address: Some(frame.from),
+            to_address: frame.to.and_then(|x| x.as_address().copied()),
+            value: frame.value,
+            input: Some(frame.input),
+            output: frame.output,
+            trace_type: Some("call".to_string()),
+            call_type: Some(frame.typ.to_lowercase()),
+            reward_type: None,
+            gas: Some(frame.gas.as_u64()),
+            gas_used: Some(frame.gas_used.as_u64()),
+            subtraces,
+            trace_address,
+            error: frame.error,
+            transaction_hash: Some(transaction_hash),
+            block_number,
+            block_timestamp: None,
+            block_hash: None,
+        })
+    }
     pub fn from_ethers(trace: EtherTrace) -> Option<Self> {
         match trace {
             EtherTrace {
