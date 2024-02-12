@@ -39,7 +39,9 @@ impl WebSocketConsumer {
                     let mut stream = ws.subscribe_blocks().await?;
                     let mut trace_tree = TraceTree::new(chain.id);
 
-                    let backoff = ConstantBuilder::default();
+                    let backoff = ConstantBuilder::default()
+                        .with_delay(Duration::from_millis(2_000))
+                        .with_max_times(5);
                     while let Some(b) = stream.next().await {
                         if let Some(mut block) = Block::from_ethers(b) {
                             let block_number = BlockNumber::Number(block.number.into());
@@ -67,7 +69,7 @@ impl WebSocketConsumer {
                             // if index tx, call debug_trace_block_by_number with non top call
                             if chain.index_tx {
                                 // sleep to avoid block not found
-                                sleep(Duration::from_millis(500)).await;
+                                sleep(Duration::from_secs(1)).await;
                                 let traces = get_traces
                                     .retry(&backoff)
                                     .notify(|err, _| error!("Error getting traces: {:?}", err))
