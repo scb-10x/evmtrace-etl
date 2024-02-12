@@ -9,6 +9,7 @@ use crate::config::{Chain, CONFIG};
 
 pub static PROVIDER_POOL: Lazy<ProviderPool> = Lazy::new(ProviderPool::new);
 
+#[derive(Debug, Default)]
 pub struct ProviderPool {
     rpc: RwLock<HashMap<u64, Arc<Provider<Http>>>>,
     ws: RwLock<HashMap<u64, Arc<Provider<Ws>>>>,

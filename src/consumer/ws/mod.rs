@@ -79,7 +79,7 @@ impl WebSocketConsumer {
                                         })
                                     })
                                     .flatten()
-                                    .filter_map(|t| t)
+                                    .flatten()
                                 {
                                     if trace.trace_address.is_empty() {
                                         if let Some(results) = trace_tree.commit() {

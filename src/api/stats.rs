@@ -61,14 +61,11 @@ impl Stats {
                     };
                 }
 
-                match tc {
-                    Commiter::Kafka(tc) => {
-                        stats
-                            .write()
-                            .await
-                            .insert((tc.topic_id, None), tc.offset as u64);
-                    }
-                    _ => {}
+                if let Commiter::Kafka(tc) = tc {
+                    stats
+                        .write()
+                        .await
+                        .insert((tc.topic_id, None), tc.offset as u64);
                 }
             }
 
