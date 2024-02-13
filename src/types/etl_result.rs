@@ -151,8 +151,8 @@ impl AsRef<Contract> for Contract {
 
 impl Insertable for Transaction {
     const INSERT_QUERY: &'static str = "INSERT INTO transactions (
-        chain_id, from_address, to_address, closest_address,
-        function_signature, transaction_hash, transaction_index,
+        chain_id, transaction_hash, from_address, to_address, closest_address,
+        function_signature, transaction_index,
         block_number, block_timestamp, block_hash, value, input,
         gas_used_total, gas_used_first_degree, gas_used_second_degree,
         ec_recover_count, ec_add_count, ec_mul_count, ec_pairing_count, ec_pairing_input_sizes, ec_recover_addresses, error
@@ -160,8 +160,9 @@ impl Insertable for Transaction {
 
     fn value(&self) -> String {
         format!(
-            "({},'{}','{}','{{{}}}','{:?}','{:?}',{},{},{},{},{},'{}',{},{},{},{},{},{},{},'{{{}}}','{{{}}}',{})",
+            "({},'{:?}','{}','{}','{{{}}}','{:?}',{},{},{},{},{},'{}',{},{},{},{},{},{},{},'{{{}}}','{{{}}}',{})",
             self.chain_id,
+            self.transaction_hash,
             to_checksum(&self.from_address, None),
             to_checksum(&self.to_address, None),
             self.closest_address
@@ -170,7 +171,6 @@ impl Insertable for Transaction {
                 .collect::<Vec<_>>()
                 .join(","),
             self.function_signature,
-            self.transaction_hash,
             self.transaction_index,
             self.block_number,
             self.block_timestamp
@@ -200,6 +200,12 @@ impl Insertable for Transaction {
                 .join(","),
             self.error.as_ref().map(|e| format!("'{}'", e)).unwrap_or("NULL".to_string())
         )
+    }
+
+    fn remove_duplicates(v: &mut Vec<String>) {
+        v.reverse();
+        v.dedup_by(|v1, v2| v1.split(',').take(2).eq(v2.split(',').take(2)));
+        v.reverse();
     }
 }
 
