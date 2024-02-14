@@ -35,7 +35,7 @@ strike! {
                 pub db: String,
             }
         ,
-        pub redis: String,
+        pub redis: Option<String>,
         pub chains: Vec<Chain>,
         pub port: u16,
     }
@@ -53,7 +53,7 @@ impl Config {
                 password: var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD must be set"),
                 db: var("POSTGRES_DB").expect("POSTGRES_DB must be set"),
             },
-            redis: var("REDIS_URL").expect("REDIS_URL must be set"),
+            redis: var("REDIS_URL").ok(),
             chains: var("CHAINS")
                 .ok()
                 .map(|chains| from_str(&chains).expect("CHAINS must be a valid JSON array"))
