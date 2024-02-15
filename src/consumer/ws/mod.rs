@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use backon::{ConstantBuilder, Retryable};
-use ethers::{providers::Middleware, types::BlockNumber};
+use ethers::{
+    providers::Middleware,
+    types::{Block as EthersBlock, BlockNumber, H256},
+};
 use futures_util::StreamExt;
 use log::{error, info};
 use tokio::{
@@ -45,11 +48,7 @@ impl WebSocketConsumer {
                     while let Some(b) = stream.next().await {
                         if let Some(mut block) = Block::from_ethers(b) {
                             let block_number = BlockNumber::Number(block.number.into());
-                            let get_transactions = || async {
-                                rpc.get_block(block_number)
-                                    .await
-                                    .map(|block| block.map(|b| b.transactions).unwrap_or_default())
-                            };
+                            let get_block_details = || async { rpc.get_block(block_number).await };
                             let get_traces = || async {
                                 rpc.debug_trace_block_by_number(
                                     Some(block_number),
@@ -58,13 +57,23 @@ impl WebSocketConsumer {
                                 .await
                             };
 
-                            let transactions = get_transactions
+                            let block_details = get_block_details
                                 .retry(&backoff)
                                 .notify(|err, _| {
                                     error!("Error getting transactions from blocks: {:?}", err)
                                 })
                                 .await?;
+                            let transactions = block_details
+                                .as_ref()
+                                .map(|b| b.transactions.clone())
+                                .unwrap_or_default();
                             block.transaction_count = transactions.len() as u32;
+                            if let Some(EthersBlock::<H256> {
+                                size: Some(size), ..
+                            }) = block_details
+                            {
+                                block.size = size.as_u32();
+                            }
 
                             // if index tx, call debug_trace_block_by_number with non top call
                             if chain.index_tx {
